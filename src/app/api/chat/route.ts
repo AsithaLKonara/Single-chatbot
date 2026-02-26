@@ -2,6 +2,8 @@ import { groq } from "@/lib/groq";
 import { supabase } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
     try {
         const { messages, context, projectId, userId } = await req.json();

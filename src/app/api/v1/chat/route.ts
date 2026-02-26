@@ -2,6 +2,8 @@ import { groq } from "@/lib/groq";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
     try {
         const apiKey = req.headers.get("x-api-key");
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
             take: 3
         });
 
-        const kbContent = knowledge.map(k => k.content).join("\n");
+        const kbContent = knowledge.map((k: any) => k.content).join("\n");
 
         const response = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
