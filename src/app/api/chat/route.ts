@@ -8,7 +8,10 @@ export async function POST(req: Request) {
         const response = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
             messages: [
-                { role: "system", content: "You are a helpful assistant. Use context if provided. Be concise." },
+                {
+                    role: "system",
+                    content: `Be concise. Context: ${JSON.stringify(context || {})}`
+                },
                 ...messages.slice(-3),
             ],
             max_completion_tokens: 200,

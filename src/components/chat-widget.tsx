@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MessageCircle, Send, X } from "lucide-react";
+import { getSystemContext } from "@/lib/context";
 
 export function ChatWidget() {
     const [isOpen, setIsOpen] = useState(false);
@@ -19,7 +20,10 @@ export function ChatWidget() {
         try {
             const res = await fetch("/api/chat", {
                 method: "POST",
-                body: JSON.stringify({ messages: newMessages }),
+                body: JSON.stringify({
+                    messages: newMessages,
+                    context: getSystemContext()
+                }),
             });
             const data = await res.json();
             setMessages([...newMessages, { role: "assistant", content: data.content }]);
