@@ -1,20 +1,35 @@
 (function () {
-    const script = document.currentScript;
-    const apiKey = script.getAttribute('data-api-key');
-    const projectId = script.getAttribute('data-project-id');
+    class UniversalChatbot extends HTMLElement {
+        constructor() {
+            super();
+            this.attachShadow({ mode: 'open' });
+        }
 
-    const container = document.createElement('div');
-    container.id = 'omnichat-container';
-    document.body.appendChild(container);
+        connectedCallback() {
+            const projectId = this.getAttribute('project-id') || '';
+            const primaryColor = this.getAttribute('primary-color') || '#3b82f6';
 
-    const iframe = document.createElement('iframe');
-    iframe.src = `https://universal-ai-chatbot.vercel.app/embed?projectId=${projectId}`;
-    iframe.style.position = 'fixed';
-    iframe.style.bottom = '20px';
-    iframe.style.right = '20px';
-    iframe.style.width = '350px';
-    iframe.style.height = '500px';
-    iframe.style.border = 'none';
-    iframe.style.zIndex = '9999';
-    container.appendChild(iframe);
+            const container = document.createElement('div');
+            container.style.position = 'fixed';
+            container.style.bottom = '0';
+            container.style.right = '0';
+            container.style.zIndex = '2147483647';
+
+            const iframe = document.createElement('iframe');
+            // Replace with your production URL
+            iframe.src = `${window.location.origin}/embed?projectId=${projectId}&primaryColor=${encodeURIComponent(primaryColor)}`;
+            iframe.style.width = '450px';
+            iframe.style.height = '650px';
+            iframe.style.border = 'none';
+            iframe.style.background = 'transparent';
+            iframe.allowTransparency = 'true';
+
+            container.appendChild(iframe);
+            this.shadowRoot.appendChild(container);
+        }
+    }
+
+    if (!customElements.get('universal-chatbot')) {
+        customElements.define('universal-chatbot', UniversalChatbot);
+    }
 })();

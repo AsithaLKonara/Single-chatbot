@@ -6,11 +6,16 @@ import { Suspense } from "react";
 
 function ChatEmbed() {
     const searchParams = useSearchParams();
-    const projectId = searchParams.get("projectId");
+    const projectId = searchParams.get("projectId") || undefined;
+    const primaryColor = searchParams.get("primaryColor") || undefined;
 
     return (
-        <div className="bg-transparent w-full h-full">
-            <ChatWidget defaultOpen={true} projectId={projectId || undefined} />
+        <div className="bg-transparent w-full h-full flex items-end justify-end p-0">
+            <ChatWidget
+                defaultOpen={true}
+                projectId={projectId}
+                primaryColor={primaryColor}
+            />
         </div>
     );
 }
