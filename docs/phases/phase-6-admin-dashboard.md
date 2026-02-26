@@ -4,12 +4,12 @@
 A central platform for users to manage their chatbots, knowledge bases, and view logs.
 
 ## Deliverables
-- [ ] Project management UI
-- [ ] Knowledge upload and management
-- [ ] Analytics and conversation logs
+- [x] Project management UI
+- [x] Knowledge upload and management
+- [x] Analytics and conversation logs
 
 ## Checklist
-- [ ] Design and build dashboard layout
-- [ ] Implement file upload for knowledge (PDF, TXT, etc.)
-- [ ] Create API key generation and management
-- [ ] Build conversation history viewer
+- [x] Design and build dashboard layout
+- [x] Implement file upload for knowledge (PDF, TXT, etc.)
+- [x] Create API key generation and management
+- [x] Build conversation history viewer

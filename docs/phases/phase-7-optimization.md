@@ -4,12 +4,12 @@
 Refine the system for speed, accuracy, and reliability.
 
 ## Deliverables
-- [ ] Prompt engineering optimization
-- [ ] Caching layer for common queries
-- [ ] Vector search tuning (re-ranking)
+- [x] Prompt engineering optimization
+- [x] Caching layer for common queries
+- [x] Vector search tuning (re-ranking)
 
 ## Checklist
-- [ ] Benchmarking response times
-- [ ] Implementing Redis caching
-- [ ] Fine-tuning chunk size and overlap for RAG
-- [ ] A/B testing prompt variations
+- [x] Benchmarking response times
+- [x] Implementing Redis caching
+- [x] Fine-tuning chunk size and overlap for RAG
+- [x] A/B testing prompt variations
