@@ -1,4 +1,4 @@
-import { groq } from "../src/lib/groq.ts";
+import { groq } from "../src/lib/groq";
 
 async function run() {
     try {
@@ -11,7 +11,7 @@ async function run() {
         console.log("Success! Response from Groq:");
         console.log(response.choices[0].message.content);
     } catch (e) {
-        console.error("Failed to fetch from Groq:", e.message);
+        console.error("Failed to fetch from Groq:", (e as Error).message);
     }
 }
 run();
