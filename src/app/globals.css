@@ -1,74 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
   --color-brand: #000;
   --color-accent: #3b82f6;
   --font-sans: 'Inter', system-ui, sans-serif;
-  --animate-orbit: orbit 20s linear infinite;
-  --animate-border: border-flow 4s linear infinite;
-}
-
-@keyframes orbit {
-  from {
-    transform: rotate(0deg) translateX(100px) rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg) translateX(100px) rotate(-360deg);
-  }
-}
-
-@keyframes border-flow {
-  0% {
-    border-image-source: linear-gradient(45deg, #3b82f6, #fff, #000);
-  }
-
-  50% {
-    border-image-source: linear-gradient(180deg, #000, #3b82f6, #fff);
-  }
-
-  100% {
-    border-image-source: linear-gradient(405deg, #3b82f6, #fff, #000);
-  }
 }
 
 :root {
-  --background: #fff;
-  --foreground: #000;
-  --glass: rgba(255, 255, 255, 0.4);
+  --background: #09090b;
+  --foreground: #fafafa;
+  --border: rgba(255,255,255,0.1);
+  --glass: rgba(255,255,255,0.04);
 }
 
-.dark {
-  --background: #000;
-  --foreground: #fff;
-  --glass: rgba(0, 0, 0, 0.4);
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(200px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(200px) rotate(-360deg); }
 }
+
+@keyframes border-flow {
+  0%   { border-image-source: linear-gradient(45deg,  #3b82f6, #fff, #09090b); }
+  50%  { border-image-source: linear-gradient(180deg, #09090b, #3b82f6, #fff); }
+  100% { border-image-source: linear-gradient(405deg, #3b82f6, #fff, #09090b); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+html { color-scheme: dark; }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
-.moving-bg {
-  position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at center, rgba(59, 130, 246, 0.15) 0%, transparent 40%);
-  animation: orbit 30s linear infinite;
-  pointer-events: none;
-  z-index: -1;
-}
+/* ── Nano design system ─────────────────────────────────── */
 
 .nano-glass {
   background: var(--glass);
   backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid transparent;
-  border-image: linear-gradient(to bottom right, #3b82f6, #fff, #000) 1;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 32px 0 rgba(0,0,0,0.4),
+              inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .nano-card-glow {
@@ -79,11 +58,40 @@ body {
   content: "";
   position: absolute;
   inset: -1px;
-  background: linear-gradient(45deg, #3b82f6, #fff, #000);
+  background: linear-gradient(135deg, rgba(59,130,246,0.5), transparent 50%, rgba(59,130,246,0.2));
   background-size: 200% 200%;
-  animation: border-flow 6s linear infinite;
+  animation: border-flow 8s linear infinite;
   z-index: -1;
   border-radius: inherit;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  padding: 1px;
 }
+
+.nano-gradient {
+  background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,0.15), transparent);
+}
+
+.moving-bg {
+  position: fixed;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle at center, rgba(59,130,246,0.06) 0%, transparent 50%);
+  animation: orbit 40s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+.tracking-tightest { letter-spacing: -0.05em; }
+
+/* ── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Selection ──────────────────────────────────────────── */
+::selection { background: rgba(59,130,246,0.3); color: #fff; }
