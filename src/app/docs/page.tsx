@@ -1,82 +1,128 @@
 "use client";
+import { Navbar, Section, NanoCard } from "@/components/ui-nano";
+import { Copy, Terminal, Check, Command, Book, Globe, Shield, Code } from "lucide-react";
 import { useState } from "react";
-import { Copy, Terminal, Check, Command } from "lucide-react";
-import { NanoCard } from "@/components/ui-nano";
+import { motion } from "framer-motion";
 
 export default function DocsPage() {
     const [copied, setCopied] = useState(false);
     const copyCode = (t: string) => { navigator.clipboard.writeText(t); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
     const samples = {
-        curl: `curl -X POST https://api.omnichat.ai/v1/chat \\
-  -H "x-api-key: <KEY>" \\
-  -d '{"messages": [{"role": "user", "content": "Query"}]}'`
+        sdk: `<script>\n  window.OmniChatConfig = {\n    apiKey: "YOUR_API_KEY",\n    primaryColor: "#3b82f6"\n  };\n</script>\n<script src="https://universal-chatbot-psi.vercel.app/widget.js" async></script>`,
+        curl: `curl -X POST https://universal-chatbot-psi.vercel.app/api/v1/chat \\\n  -H "x-api-key: YOUR_API_KEY" \\\n  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'`
     };
 
     return (
-        <div className="min-h-screen bg-background text-foreground font-sans p-10 max-w-7xl mx-auto">
-            <header className="mb-32">
-                <div className="w-12 h-12 bg-foreground text-background rounded-full flex items-center justify-center font-black mb-10"><Command size={24} /></div>
-                <h1 className="text-7xl font-black tracking-tightest leading-none mb-6">PROTOCOLS.</h1>
-                <p className="text-xl opacity-40 font-medium max-w-xl uppercase tracking-tighter">System integration and interface specifications.</p>
-            </header>
+        <div className="min-h-screen bg-background text-foreground font-sans">
+            <Navbar />
+            
+            <div className="moving-bg" />
 
-            <div className="grid md:grid-cols-[1fr_400px] gap-20">
-                <div className="space-y-32">
-                    <section>
-                        <h2 className="text-sm font-black uppercase tracking-[0.2em] opacity-30 mb-10">01 / Authentication</h2>
-                        <div className="space-y-6">
-                            <p className="text-lg font-medium leading-relaxed opacity-70">Requests must authenticate via the <code className="bg-border px-2 py-1 rounded">x-api-key</code> header. Unauthorized entities will be rejected with 401 status.</p>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h2 className="text-sm font-black uppercase tracking-[0.2em] opacity-30 mb-10">02 / Completion</h2>
-                        <div className="space-y-8">
-                            <div className="flex items-center gap-4 bg-accent/10 border border-accent/20 p-4 rounded-2xl w-fit">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-accent">Post</span>
-                                <span className="text-[10px] font-bold opacity-60">/v1/chat</span>
+            <Section className="pt-40 pb-20">
+                <div className="flex flex-col md:flex-row gap-20">
+                    <div className="flex-1 space-y-12">
+                        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+                            <div className="flex items-center gap-3 mb-10 opacity-30">
+                                <Book size={18} />
+                                <span className="text-xs font-black uppercase tracking-[0.4em]">System Protocol v4.2</span>
                             </div>
-                            <p className="text-lg font-medium leading-relaxed opacity-70">Generates autonomous responses based on the neural knowledge index of the specific project module.</p>
-                            <NanoCard className="p-0 border-none overflow-hidden">
-                                <div className="bg-border/50 p-4 flex justify-between items-center">
-                                    <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Schema</span>
-                                </div>
-                                <div className="p-6 space-y-4">
-                                    {["messages (array)", "userId (string)"].map(item => (
-                                        <div key={item} className="flex justify-between border-b border-border pb-2">
-                                            <span className="text-xs font-black uppercase tracking-tighter">{item.split(" ")[0]}</span>
-                                            <span className="text-[10px] opacity-40 italic">{item.split(" ")[1]}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </NanoCard>
-                        </div>
-                    </section>
-                </div>
+                            <h1 className="text-6xl md:text-8xl font-black uppercase tracking-tightest leading-[0.9] mb-10">Integration.</h1>
+                            <p className="text-xl font-bold opacity-30 leading-relaxed uppercase tracking-tighter max-w-xl">
+                                Detailed technical specifications for interfacing with the OmniChat neural core.
+                            </p>
+                        </motion.div>
 
-                <aside className="sticky top-10 flex flex-col gap-6">
-                    <div className="bg-foreground text-background rounded-[40px] p-8 shadow-2xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4">
-                            <button onClick={() => copyCode(samples.curl)} className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all">
-                                {copied ? <Check size={16} /> : <Copy size={16} />}
-                            </button>
+                        <div className="space-y-20 pt-10">
+                            <section className="space-y-8">
+                                <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-accent">01 / Universal SDK</h2>
+                                <p className="text-sm opacity-50 leading-relaxed max-w-2xl">
+                                    The easiest way to integrate. Embed our lightweight bridge script into your HTML for full context-aware chat capabilities.
+                                </p>
+                                <div className="space-y-4">
+                                    <div className="rounded-[32px] bg-foreground text-background p-10 shadow-2xl relative group overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-6">
+                                            <button onClick={() => copyCode(samples.sdk)} className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all">
+                                                {copied ? <Check size={16} /> : <Copy size={16} />}
+                                            </button>
+                                        </div>
+                                        <pre className="text-xs md:text-sm font-mono font-bold leading-relaxed whitespace-pre-wrap opacity-80 uppercase tracking-tighter">
+                                            {samples.sdk}
+                                        </pre>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {["Shadow DOM Isolation", "Auto-Context", "Brand Mapping", "Analytics Logs"].map(f => (
+                                            <div key={f} className="p-4 rounded-2xl bg-foreground/5 text-center text-[9px] font-black uppercase tracking-widest opacity-40">
+                                                {f}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="space-y-8">
+                                <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-accent">02 / Neural API</h2>
+                                <p className="text-sm opacity-50 leading-relaxed max-w-2xl">
+                                    Full control for custom implementations. Interface directly with our sub-second inference cluster via standardized REST protocols.
+                                </p>
+                                <div className="rounded-[32px] bg-foreground text-background p-10 shadow-2xl relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-6">
+                                        <button onClick={() => copyCode(samples.curl)} className="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all">
+                                            {copied ? <Check size={16} /> : <Copy size={16} />}
+                                        </button>
+                                    </div>
+                                    <pre className="text-xs md:text-sm font-mono font-bold leading-relaxed whitespace-pre-wrap opacity-80 uppercase tracking-tighter">
+                                        {samples.curl}
+                                    </pre>
+                                </div>
+                            </section>
                         </div>
-                        <h4 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 mb-8 flex items-center gap-2">
-                            <Terminal size={12} /> Interaction Terminal
-                        </h4>
-                        <pre className="text-xs font-bold leading-relaxed overflow-x-auto selection:bg-white selection:text-black">
-                            {samples.curl}
-                        </pre>
                     </div>
 
-                    <NanoCard className="border-accent/30 bg-accent/5">
-                        <h4 className="text-xs font-black uppercase tracking-widest mb-2 text-accent">Neural SDK</h4>
-                        <p className="text-xs font-bold opacity-50 mb-6 leading-relaxed">Direct Shadow DOM injection for web environments.</p>
-                        <button className="w-full py-4 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Acquire Module</button>
-                    </NanoCard>
-                </aside>
-            </div>
+                    <aside className="w-full md:w-[400px] space-y-6">
+                        <NanoCard className="p-10 space-y-8 border-accent/20 bg-accent/[0.03]">
+                            <div className="w-12 h-12 bg-accent text-white rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+                                <Shield size={24} />
+                            </div>
+                            <h4 className="text-2xl font-black uppercase tracking-tightest">Secure Ops.</h4>
+                            <p className="text-xs font-bold opacity-30 leading-relaxed uppercase tracking-widest">
+                                All communication is authorized via project-specific Neural Keys. Data is encrypted in transit and at rest.
+                            </p>
+                            <div className="pt-4 border-t border-accent/10 flex items-center justify-between">
+                                <span className="text-[10px] font-black uppercase tracking-widest opacity-20">Latency</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-accent">&lt; 400ms</span>
+                            </div>
+                        </NanoCard>
+                        
+                        <div className="p-10 rounded-[40px] border border-foreground/10 bg-foreground/[0.01] space-y-6">
+                            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">Quick Access</h4>
+                            <div className="space-y-4">
+                                {[
+                                    { label: "Authentication", icon: Shield },
+                                    { label: "Context Nodes", icon: Globe },
+                                    { label: "Response Schema", icon: Code },
+                                    { label: "Error Protocols", icon: Terminal },
+                                ].map(item => (
+                                    <button key={item.label} className="w-full flex items-center justify-between group">
+                                        <div className="flex items-center gap-4 text-xs font-black uppercase tracking-tighter opacity-40 group-hover:opacity-100 transition-opacity">
+                                            <item.icon size={14} /> {item.label}
+                                        </div>
+                                        <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </Section>
+
+            <footer className="py-20 text-center opacity-10 text-[9px] font-black uppercase tracking-[0.5em]">
+                OMNICHAT PROTOCOL · SYSTEM STABLE
+            </footer>
         </div>
     );
+}
+
+function ChevronRight({ size, className }: { size: number, className?: string }) {
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>;
 }

@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
     LayoutDashboard, FolderOpen, MessageSquare, BookOpen, Key,
     Plus, Trash2, Copy, Check, ChevronRight, Globe, Cpu,
-    TrendingUp, Zap, Command, LogOut, X, AlertCircle, RefreshCw
+    TrendingUp, Zap, Command, LogOut, X, AlertCircle, RefreshCw, Send, FileText
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Project { id: string; name: string; apiKey: string; conversations: number; tokens: number; createdAt: string; }
 interface Conversation { id: string; projectId: string; userId: string; message: string; response: string; createdAt: string; project: { name: string }; }
+interface Knowledge { id: string; content: string; createdAt: string; }
 interface DashboardData { user: { id: string; email: string; plan: string; role: string }; projects: Project[]; usage: { total: number; daily: number; limit: number }; }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -31,8 +32,9 @@ function timeAgo(date: string) {
 const NAV = [
     { id: "overview", icon: LayoutDashboard, label: "Overview" },
     { id: "projects", icon: FolderOpen, label: "Projects" },
+    { id: "knowledge", icon: BookOpen, label: "Knowledge" },
     { id: "conversations", icon: MessageSquare, label: "Logs" },
-    { id: "docs", icon: BookOpen, label: "API Docs" },
+    { id: "docs", icon: Key, label: "API Docs" },
 ];
 
 // ─── Code snippet helper ──────────────────────────────────────────────────────
@@ -59,9 +61,11 @@ export default function Dashboard() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [projects, setProjects] = useState<Project[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [knowledge, setKnowledge] = useState<Knowledge[]>([]);
     const [convTotal, setConvTotal] = useState(0);
     const [convPage, setConvPage] = useState(0);
     const [filterProject, setFilterProject] = useState<string>("");
+    const [selectedProjectId, setSelectedProjectId] = useState<string>("");
     const [loadingData, setLoadingData] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [newProjectName, setNewProjectName] = useState("");
@@ -69,6 +73,8 @@ export default function Dashboard() {
     const [showCreate, setShowCreate] = useState(false);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+    const [newKnowledge, setNewKnowledge] = useState("");
+    const [addingKnowledge, setAddingKnowledge] = useState(false);
 
     // ── Fetch dashboard overview ──────────────────────────────────────────────
     const fetchData = useCallback(async () => {
@@ -77,12 +83,16 @@ export default function Dashboard() {
         try {
             const res = await fetch("/api/user/dashboard", { headers: authHeaders() });
             if (res.status === 401) { localStorage.removeItem("token"); router.push("/login"); return; }
+            if (!res.ok) throw new Error("Connection Failure");
             const json = await res.json();
             setData(json);
             setProjects(json.projects || []);
+            if (json.projects.length > 0 && !selectedProjectId) {
+                setSelectedProjectId(json.projects[0].id);
+            }
         } catch (e: any) { setError(e.message); }
         finally { setLoadingData(false); }
-    }, [router]);
+    }, [router, selectedProjectId]);
 
     // ── Fetch conversations ───────────────────────────────────────────────────
     const fetchConversations = useCallback(async (page = 0, projectId = "") => {
@@ -96,10 +106,21 @@ export default function Dashboard() {
         } catch {}
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
-    useEffect(() => { if (tab === "conversations") fetchConversations(convPage, filterProject); }, [tab, convPage, filterProject]);
+    // ── Fetch knowledge ───────────────────────────────────────────────────────
+    const fetchKnowledge = useCallback(async (projectId: string) => {
+        if (!projectId) return;
+        try {
+            const res = await fetch(`/api/user/knowledge?projectId=${projectId}`, { headers: authHeaders() });
+            const json = await res.json();
+            setKnowledge(json || []);
+        } catch {}
+    }, []);
 
-    // ── Create project ────────────────────────────────────────────────────────
+    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { if (tab === "conversations") fetchConversations(convPage, filterProject); }, [tab, convPage, filterProject, fetchConversations]);
+    useEffect(() => { if (tab === "knowledge" && selectedProjectId) fetchKnowledge(selectedProjectId); }, [tab, selectedProjectId, fetchKnowledge]);
+
+    // ── Project Actions ──────────────────────────────────────────────────────
     const createProject = async () => {
         if (!newProjectName.trim()) return;
         setCreatingProject(true);
@@ -119,13 +140,35 @@ export default function Dashboard() {
         } finally { setCreatingProject(false); }
     };
 
-    // ── Delete project ────────────────────────────────────────────────────────
     const deleteProject = async (id: string) => {
         if (!confirm("Permanently destroy this module and all its data?")) return;
         await fetch(`/api/user/projects?id=${id}`, { method: "DELETE", headers: authHeaders() });
         setProjects(prev => prev.filter(p => p.id !== id));
         if (selectedProject?.id === id) setSelectedProject(null);
         fetchData();
+    };
+
+    // ── Knowledge Actions ────────────────────────────────────────────────────
+    const addKnowledge = async () => {
+        if (!newKnowledge.trim() || !selectedProjectId) return;
+        setAddingKnowledge(true);
+        try {
+            const res = await fetch("/api/user/knowledge", {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({ projectId: selectedProjectId, content: newKnowledge }),
+            });
+            if (res.ok) {
+                const k = await res.json();
+                setKnowledge(prev => [k, ...prev]);
+                setNewKnowledge("");
+            }
+        } finally { setAddingKnowledge(false); }
+    };
+
+    const removeKnowledge = async (id: string) => {
+        await fetch(`/api/user/knowledge?id=${id}`, { method: "DELETE", headers: authHeaders() });
+        setKnowledge(prev => prev.filter(k => k.id !== id));
     };
 
     const copyKey = (key: string) => {
@@ -141,7 +184,7 @@ export default function Dashboard() {
         <div className="min-h-screen bg-background flex items-center justify-center">
             <div className="flex flex-col items-center gap-4 opacity-30">
                 <div className="w-10 h-10 border-2 border-foreground border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs font-black uppercase tracking-widest">Initializing...</p>
+                <p className="text-xs font-black uppercase tracking-widest">Initializing Module...</p>
             </div>
         </div>
     );
@@ -160,12 +203,12 @@ export default function Dashboard() {
         <div className="min-h-screen bg-background flex text-foreground" style={{ fontFamily: "var(--font-sans)" }}>
 
             {/* ── Sidebar ─────────────────────────────────────────── */}
-            <aside className="w-16 md:w-60 border-r border-foreground/10 flex flex-col py-6 px-3 md:px-5 gap-2 sticky top-0 h-screen">
+            <aside className="w-16 md:w-60 border-r border-foreground/10 flex flex-col py-6 px-3 md:px-5 gap-2 sticky top-0 h-screen overflow-y-auto overflow-x-hidden">
                 <div className="flex items-center gap-3 mb-8 px-1">
                     <div className="w-8 h-8 bg-foreground text-background rounded-xl flex items-center justify-center flex-shrink-0">
                         <Command size={16} />
                     </div>
-                    <span className="hidden md:block text-sm font-black tracking-tighter uppercase">OmniChat</span>
+                    <span className="hidden md:block text-sm font-black tracking-tighter uppercase">OmniChat AI</span>
                 </div>
                 <nav className="flex-1 space-y-1">
                     {NAV.map(item => (
@@ -185,13 +228,13 @@ export default function Dashboard() {
                 </nav>
                 <div className="border-t border-foreground/10 pt-4 mt-2 space-y-3">
                     <div className="hidden md:block px-3 py-2">
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-1">Account</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-1">Authenticated</p>
                         <p className="text-xs font-bold truncate opacity-70">{data.user.email}</p>
                         <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest bg-accent/10 text-accent px-2 py-0.5 rounded-full">{data.user.plan}</span>
                     </div>
                     <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl opacity-30 hover:opacity-100 hover:text-red-500 transition-all">
                         <LogOut size={18} className="flex-shrink-0" />
-                        <span className="hidden md:block text-xs font-black uppercase tracking-tight">Logout</span>
+                        <span className="hidden md:block text-xs font-black uppercase tracking-tight">System Out</span>
                     </button>
                 </div>
             </aside>
@@ -202,88 +245,92 @@ export default function Dashboard() {
 
                     {/* ── Overview ──────────────────────────────────── */}
                     {tab === "overview" && (
-                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
                             <div className="flex items-start justify-between">
                                 <div>
-                                    <h1 className="text-3xl md:text-4xl font-black uppercase tracking-tighter">Overview</h1>
-                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">System Status · All Green</p>
+                                    <h1 className="text-4xl font-black uppercase tracking-tightest">Dashboard.</h1>
+                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">Holistic View · {projects.length} Nodes Online</p>
                                 </div>
                                 <button
                                     onClick={() => { setTab("projects"); setShowCreate(true); }}
-                                    className="flex items-center gap-2 px-5 py-3 bg-foreground text-background rounded-full font-black text-xs uppercase tracking-tighter shadow-lg hover:opacity-80 transition-opacity"
+                                    className="flex items-center gap-2 px-6 py-3 bg-foreground text-background rounded-full font-black text-xs uppercase tracking-tighter shadow-xl hover:scale-105 transition-transform"
                                 >
-                                    <Plus size={14} /> New Project
+                                    <Plus size={14} /> Initialize Node
                                 </button>
                             </div>
 
-                            {/* Stats grid */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {[
-                                    { icon: FolderOpen, label: "Projects", value: projects.length, sub: "Active modules" },
-                                    { icon: TrendingUp, label: "Total Tokens", value: fmt(data.usage.total), sub: "All time" },
-                                    { icon: Zap, label: "Daily Traffic", value: fmt(data.usage.daily), sub: "Last 24h" },
-                                    { icon: Cpu, label: "Saturation", value: `${saturation}%`, sub: `of ${fmt(data.usage.limit)} limit` },
+                                    { icon: FolderOpen, label: "Active Nodes", value: projects.length, sub: "Modules deployed" },
+                                    { icon: TrendingUp, label: "Throughput", value: fmt(data.usage.total), sub: "Tokens processed" },
+                                    { icon: Zap, label: "Traffic / 24h", value: fmt(data.usage.daily), sub: "Total interactions" },
+                                    { icon: Cpu, label: "Neural Load", value: `${saturation}%`, sub: `of ${fmt(data.usage.limit)} total` },
                                 ].map((s, i) => (
-                                    <div key={i} className="p-5 rounded-3xl border border-foreground/10 space-y-3 hover:border-foreground/30 transition-colors">
-                                        <s.icon size={18} className="opacity-30" />
-                                        <div className="text-2xl font-black">{s.value}</div>
-                                        <div>
-                                            <div className="text-xs font-black uppercase tracking-tighter">{s.label}</div>
-                                            <div className="text-[10px] opacity-30 uppercase tracking-widest">{s.sub}</div>
+                                    <div key={i} className="p-6 rounded-[32px] border border-foreground/10 space-y-4 hover:border-foreground/30 transition-all group nano-glass">
+                                        <div className="w-10 h-10 rounded-full bg-foreground/5 flex items-center justify-center opacity-40 group-hover:opacity-100 transition-opacity">
+                                            <s.icon size={18} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className="text-3xl font-black tracking-tighter">{s.value}</div>
+                                            <div className="text-[10px] font-black uppercase tracking-widest opacity-30">{s.label}</div>
+                                            <div className="text-[9px] opacity-20 uppercase tracking-widest font-bold">{s.sub}</div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
 
-                            {/* Saturation bar */}
-                            <div className="rounded-3xl border border-foreground/10 p-6 space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs font-black uppercase tracking-widest opacity-40">Token Usage</span>
-                                    <span className="text-xs font-black">{saturation}%</span>
+                            <div className="p-8 rounded-[40px] border border-foreground/10 space-y-4 nano-glass">
+                                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest opacity-40">
+                                    <span>Plan Utilization Index</span>
+                                    <span>{saturation}%</span>
                                 </div>
-                                <div className="h-2 bg-foreground/10 rounded-full overflow-hidden">
+                                <div className="h-2.5 bg-foreground/5 rounded-full overflow-hidden p-0.5 border border-foreground/10">
                                     <div
-                                        className="h-full bg-accent rounded-full transition-all duration-700"
+                                        className="h-full bg-accent rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(59,130,246,0.4)]"
                                         style={{ width: `${saturation}%` }}
                                     />
                                 </div>
-                                <div className="flex justify-between text-[10px] opacity-30 font-bold uppercase tracking-widest">
-                                    <span>0</span><span>{fmt(data.usage.limit)}</span>
+                                <div className="flex justify-between text-[9px] opacity-20 font-bold uppercase tracking-widest">
+                                    <span>0.00 TPS</span><span>{fmt(data.usage.limit)} MAX</span>
                                 </div>
                             </div>
 
-                            {/* Recent projects */}
-                            <div className="space-y-3">
-                                <h3 className="text-xs font-black uppercase tracking-widest opacity-30">Recent Modules</h3>
+                            <div className="space-y-6">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 px-2">Top Performance Modules</h3>
                                 {projects.length === 0 ? (
-                                    <div className="rounded-3xl border border-dashed border-foreground/20 p-12 text-center">
-                                        <Globe size={32} className="mx-auto mb-4 opacity-20" />
-                                        <p className="text-xs font-black uppercase tracking-widest opacity-30">No modules yet. Create your first project.</p>
+                                    <div className="rounded-[40px] border border-dashed border-foreground/10 p-16 text-center opacity-30">
+                                        <Globe size={40} className="mx-auto mb-5" />
+                                        <p className="text-xs font-black uppercase tracking-widest leading-loose">No active neural nodes discovered.<br/>Initialize a project to stabilize synchronization.</p>
                                     </div>
                                 ) : (
-                                    projects.slice(0, 3).map(p => (
-                                        <button
-                                            key={p.id}
-                                            onClick={() => { setSelectedProject(p); setTab("projects"); }}
-                                            className="w-full flex items-center justify-between p-5 rounded-2xl border border-foreground/10 hover:border-foreground/30 transition-all text-left group"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-9 h-9 rounded-xl bg-foreground/5 flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-colors">
-                                                    <FolderOpen size={16} />
+                                    <div className="grid gap-3">
+                                        {projects.slice(0, 3).map(p => (
+                                            <div
+                                                key={p.id}
+                                                className="flex items-center justify-between p-6 rounded-3xl border border-foreground/10 hover:border-foreground/30 transition-all bg-foreground/[0.02] group"
+                                            >
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-12 h-12 rounded-2xl bg-foreground/5 flex items-center justify-center group-hover:bg-accent group-hover:text-white transition-all shadow-sm">
+                                                        <FolderOpen size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-black uppercase tracking-tighter group-hover:text-accent transition-colors">{p.name}</p>
+                                                        <div className="flex gap-4 items-center mt-1">
+                                                            <p className="text-[10px] opacity-30 uppercase font-black tracking-widest">{p.conversations} LOGS</p>
+                                                            <div className="w-1 h-1 rounded-full bg-foreground/10" />
+                                                            <p className="text-[10px] opacity-30 uppercase font-black tracking-widest">{fmt(p.tokens)} TOKENS</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm font-black uppercase tracking-tighter">{p.name}</p>
-                                                    <p className="text-[10px] opacity-30 uppercase font-bold tracking-widest">{p.conversations} logs · {fmt(p.tokens)} tokens</p>
-                                                </div>
+                                                <button
+                                                    onClick={() => { setSelectedProject(p); setTab("projects"); }}
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-foreground hover:text-background transition-all"
+                                                >
+                                                    <ChevronRight size={18} />
+                                                </button>
                                             </div>
-                                            <ChevronRight size={16} className="opacity-30 group-hover:opacity-100 transition-opacity" />
-                                        </button>
-                                    ))
-                                )}
-                                {projects.length > 3 && (
-                                    <button onClick={() => setTab("projects")} className="w-full text-center text-[10px] font-black uppercase tracking-widest opacity-30 hover:opacity-100 transition-opacity py-2">
-                                        View all {projects.length} modules →
-                                    </button>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
                         </motion.div>
@@ -291,189 +338,279 @@ export default function Dashboard() {
 
                     {/* ── Projects ──────────────────────────────────── */}
                     {tab === "projects" && (
-                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h1 className="text-3xl font-black uppercase tracking-tighter">Projects</h1>
-                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">{projects.length} Active Modules</p>
+                                    <h1 className="text-4xl font-black uppercase tracking-tightest">Neural Nodes.</h1>
+                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">Module Identity Management</p>
                                 </div>
                                 <button
                                     onClick={() => setShowCreate(true)}
-                                    className="flex items-center gap-2 px-5 py-3 bg-foreground text-background rounded-full font-black text-xs uppercase tracking-tighter shadow-lg hover:opacity-80 transition-opacity"
+                                    className="flex items-center gap-2 px-6 py-3 bg-foreground text-background rounded-full font-black text-xs uppercase tracking-tighter"
                                 >
-                                    <Plus size={14} /> New
+                                    <Plus size={14} /> New Module
                                 </button>
                             </div>
 
-                            {/* Create form */}
                             <AnimatePresence>
                                 {showCreate && (
                                     <motion.div
                                         initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
                                         className="overflow-hidden"
                                     >
-                                        <div className="p-6 rounded-3xl border border-accent/30 bg-accent/5 flex gap-4 items-center">
+                                        <div className="p-8 rounded-[40px] border border-accent/20 bg-accent/[0.03] flex flex-col md:flex-row gap-6 items-center">
                                             <input
                                                 autoFocus
-                                                className="flex-1 bg-transparent border-b border-foreground/20 py-2 text-sm font-bold outline-none placeholder:opacity-30"
-                                                placeholder="Module name e.g. Support Bot"
+                                                className="flex-1 bg-transparent border-b border-foreground/10 pb-2 text-xl font-black outline-none placeholder:opacity-20 uppercase tracking-tighter"
+                                                placeholder="Identity Name..."
                                                 value={newProjectName}
                                                 onChange={e => setNewProjectName(e.target.value)}
                                                 onKeyDown={e => e.key === "Enter" && createProject()}
                                             />
-                                            <button
-                                                onClick={createProject}
-                                                disabled={creatingProject || !newProjectName.trim()}
-                                                className="px-5 py-2.5 bg-foreground text-background rounded-full font-black text-xs uppercase tracking-tighter disabled:opacity-40 transition-opacity"
-                                            >
-                                                {creatingProject ? "..." : "Create"}
-                                            </button>
-                                            <button onClick={() => setShowCreate(false)} className="p-2 opacity-30 hover:opacity-100 transition-opacity">
-                                                <X size={16} />
-                                            </button>
+                                            <div className="flex gap-3 w-full md:w-auto">
+                                                <button
+                                                    onClick={createProject}
+                                                    disabled={creatingProject || !newProjectName.trim()}
+                                                    className="flex-1 md:flex-none px-8 py-3 bg-foreground text-background rounded-2xl font-black text-xs uppercase tracking-tighter disabled:opacity-40"
+                                                >
+                                                    {creatingProject ? "..." : "Authorize"}
+                                                </button>
+                                                <button onClick={() => setShowCreate(false)} className="p-3 bg-foreground/5 rounded-2xl opacity-40 hover:opacity-100">
+                                                    <X size={18} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
 
-                            {/* Project list */}
-                            {projects.length === 0 ? (
-                                <div className="rounded-3xl border border-dashed border-foreground/20 p-16 text-center">
-                                    <Globe size={40} className="mx-auto mb-5 opacity-20" />
-                                    <p className="text-xs font-black uppercase tracking-widest opacity-30 mb-4">No modules deployed.</p>
-                                    <button onClick={() => setShowCreate(true)} className="px-6 py-3 bg-foreground text-background rounded-full font-black text-xs uppercase tracking-tighter">Create First Module</button>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {projects.map(p => (
-                                        <motion.div key={p.id} layout>
-                                            <button
-                                                onClick={() => setSelectedProject(selectedProject?.id === p.id ? null : p)}
-                                                className={`w-full flex items-center justify-between p-6 rounded-3xl border transition-all text-left group ${
-                                                    selectedProject?.id === p.id ? "border-accent/50 bg-accent/5" : "border-foreground/10 hover:border-foreground/30"
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${selectedProject?.id === p.id ? "bg-accent text-white" : "bg-foreground/5 group-hover:bg-foreground/10"}`}>
-                                                        <FolderOpen size={18} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-black uppercase tracking-tighter">{p.name}</p>
-                                                        <p className="text-[10px] opacity-40 uppercase font-bold tracking-widest">{timeAgo(p.createdAt)} · {p.conversations} conversations</p>
+                            <div className="space-y-4">
+                                {projects.map(p => (
+                                    <div key={p.id} className="space-y-3">
+                                        <div
+                                            className={`p-6 rounded-[32px] border transition-all flex items-center justify-between group ${
+                                                selectedProject?.id === p.id ? "border-accent/40 bg-accent/[0.03]" : "border-foreground/10 hover:border-foreground/20 bg-foreground/[0.01]"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-5">
+                                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${selectedProject?.id === p.id ? "bg-accent text-white" : "bg-foreground/5"}`}>
+                                                    <Globe size={20} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-base font-black uppercase tracking-tighter">{p.name}</p>
+                                                    <div className="flex gap-4 items-center opacity-30 text-[10px] font-black uppercase tracking-widest mt-1">
+                                                        <span>{timeAgo(p.createdAt)}</span>
+                                                        <div className="w-1 h-1 rounded-full bg-current" />
+                                                        <span>{p.conversations} Signals</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-6">
-                                                    <div className="text-right hidden md:block">
-                                                        <div className="text-xl font-black">{fmt(p.tokens)}</div>
-                                                        <div className="text-[10px] opacity-30 uppercase font-black tracking-widest">tokens</div>
-                                                    </div>
-                                                    <ChevronRight size={16} className={`opacity-30 transition-transform ${selectedProject?.id === p.id ? "rotate-90" : ""}`} />
-                                                </div>
-                                            </button>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <button 
+                                                    onClick={() => { setSelectedProjectId(p.id); setTab("knowledge"); }}
+                                                    className="hidden md:flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-20 hover:opacity-100 transition-opacity px-4 py-2 bg-foreground/5 rounded-xl"
+                                                >
+                                                    <BookOpen size={12} /> Knowledge
+                                                </button>
+                                                <button
+                                                    onClick={() => setSelectedProject(selectedProject?.id === p.id ? null : p)}
+                                                    className={`w-10 h-10 rounded-full flex items-center justify-center bg-foreground/5 transition-transform ${selectedProject?.id === p.id ? "rotate-90 text-accent" : ""}`}
+                                                >
+                                                    <ChevronRight size={18} />
+                                                </button>
+                                            </div>
+                                        </div>
 
-                                            {/* Expanded project detail */}
-                                            <AnimatePresence>
-                                                {selectedProject?.id === p.id && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-                                                        className="overflow-hidden"
-                                                    >
-                                                        <div className="mt-2 p-6 rounded-3xl border border-foreground/10 space-y-5 bg-foreground/2">
-                                                            {/* API Key */}
+                                        <AnimatePresence>
+                                            {selectedProject?.id === p.id && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, scale: 0.98, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                                                    className="p-8 rounded-[40px] border border-foreground/10 bg-foreground/[0.02] space-y-8"
+                                                >
+                                                    <div className="grid md:grid-cols-2 gap-8">
+                                                        <div className="space-y-6">
                                                             <div>
-                                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2 flex items-center gap-1.5"><Key size={10} /> API Key</p>
-                                                                <div className="flex items-center gap-3 bg-foreground/5 rounded-2xl px-4 py-3">
-                                                                    <code className="flex-1 text-xs font-bold opacity-60 truncate">{p.apiKey}</code>
-                                                                    <button onClick={() => copyKey(p.apiKey)} className="flex-shrink-0 p-1.5 hover:opacity-100 opacity-40 transition-opacity">
-                                                                        {copiedKey === p.apiKey ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                                                                    </button>
+                                                                <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 mb-3 flex items-center gap-2"><Key size={12} /> Access Protocol</p>
+                                                                <div className="group relative">
+                                                                    <div className="flex items-center gap-4 bg-foreground/5 rounded-2xl px-5 py-4 border border-foreground/5">
+                                                                        <code className="flex-1 text-xs font-bold opacity-60 truncate font-mono">{p.apiKey}</code>
+                                                                        <button onClick={() => copyKey(p.apiKey)} className="hover:text-accent transition-colors">
+                                                                            {copiedKey === p.apiKey ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                                                                        </button>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                            {/* Integration snippet */}
-                                                            <div>
-                                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2">Quick Integration</p>
-                                                                <CodeBlock lang="javascript" code={`fetch("https://universal-chatbot-psi.vercel.app/api/v1/chat", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "x-api-key": "${p.apiKey}"\n  },\n  body: JSON.stringify({\n    messages: [{ role: "user", content: "Hello!" }],\n    userId: "visitor-123"\n  })\n})\n.then(r => r.json())\n.then(d => console.log(d.content));`} />
-                                                            </div>
-                                                            {/* Action buttons */}
-                                                            <div className="flex justify-between items-center pt-2 border-t border-foreground/10">
-                                                                <button
-                                                                    onClick={() => { setFilterProject(p.id); setTab("conversations"); }}
-                                                                    className="flex items-center gap-2 text-xs font-black uppercase tracking-tighter opacity-50 hover:opacity-100 transition-opacity"
-                                                                >
-                                                                    <MessageSquare size={14} /> View Logs
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => deleteProject(p.id)}
-                                                                    className="flex items-center gap-2 text-xs font-black uppercase tracking-tighter opacity-30 hover:opacity-100 hover:text-red-500 transition-all"
-                                                                >
-                                                                    <Trash2 size={14} /> Destroy Module
-                                                                </button>
+                                                            <div className="space-y-3">
+                                                                <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">Integration Metrics</p>
+                                                                <div className="flex gap-4">
+                                                                    <div className="flex-1 p-5 rounded-2xl bg-foreground/5 text-center">
+                                                                        <div className="text-xl font-black">{fmt(p.tokens)}</div>
+                                                                        <div className="text-[9px] font-black uppercase tracking-widest opacity-30 mt-1">Processed</div>
+                                                                    </div>
+                                                                    <div className="flex-1 p-5 rounded-2xl bg-foreground/5 text-center">
+                                                                        <div className="text-xl font-black">{p.conversations}</div>
+                                                                        <div className="text-[9px] font-black uppercase tracking-widest opacity-30 mt-1">Successful</div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
-                                        </motion.div>
-                                    ))}
+                                                        <div className="space-y-4">
+                                                            <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">Live Implementation</p>
+                                                            <CodeBlock lang="js" code={`fetch("/api/v1/chat", {\n  method: "POST",\n  headers: { "x-api-key": "${p.apiKey}" },\n  body: JSON.stringify({ messages: [] })\n})`} />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-between items-center pt-6 border-t border-foreground/5">
+                                                        <div className="flex gap-6">
+                                                            <button onClick={() => { setFilterProject(p.id); setTab("conversations"); }} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:text-accent transition-all">
+                                                                <MessageSquare size={14} /> Full Logs
+                                                            </button>
+                                                            <button onClick={() => { setSelectedProjectId(p.id); setTab("knowledge"); }} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:text-accent transition-all">
+                                                                <BookOpen size={14} /> Knowledge Node
+                                                            </button>
+                                                        </div>
+                                                        <button onClick={() => deleteProject(p.id)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-20 hover:opacity-100 hover:text-red-500 transition-all">
+                                                            <Trash2 size={14} /> Decommission
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* ── Knowledge Management ─────────────────────────────── */}
+                    {tab === "knowledge" && (
+                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h1 className="text-4xl font-black uppercase tracking-tightest">Corpus.</h1>
+                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">Neural Context Management</p>
                                 </div>
-                            )}
+                                <div className="flex gap-3">
+                                    <select
+                                        value={selectedProjectId}
+                                        onChange={e => setSelectedProjectId(e.target.value)}
+                                        className="bg-foreground/5 border border-foreground/10 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-tighter outline-none min-w-[200px]"
+                                    >
+                                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Add Knowledge Input */}
+                            <div className="p-8 rounded-[40px] border border-foreground/10 bg-foreground/[0.02] space-y-4">
+                                <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">Ingest New Knowledge Stream</p>
+                                <div className="space-y-4">
+                                    <textarea
+                                        className="w-full h-40 bg-foreground/5 border border-foreground/10 rounded-[32px] p-6 text-sm font-medium outline-none placeholder:opacity-20 resize-none focus:border-accent/40 transition-colors"
+                                        placeholder="Paste documentation, FAQs, or raw context here... The AI will use this in real-time."
+                                        value={newKnowledge}
+                                        onChange={e => setNewKnowledge(e.target.value)}
+                                    />
+                                    <div className="flex justify-end">
+                                        <button
+                                            onClick={addKnowledge}
+                                            disabled={addingKnowledge || !newKnowledge.trim() || !selectedProjectId}
+                                            className="px-8 py-4 bg-foreground text-background rounded-2xl font-black text-xs uppercase tracking-tighter flex items-center gap-2 disabled:opacity-40 hover:scale-[1.02] transition-transform"
+                                        >
+                                            <Send size={14} /> {addingKnowledge ? "Processing..." : "Inject into Neural Node"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Knowledge List */}
+                            <div className="space-y-4">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 px-2 flex items-center justify-between">
+                                    <span>Active Context Streams</span>
+                                    <span>{knowledge.length} Units</span>
+                                </h3>
+                                {knowledge.length === 0 ? (
+                                    <div className="rounded-[40px] border border-dashed border-foreground/10 p-20 text-center opacity-30">
+                                        <BookOpen size={40} className="mx-auto mb-5" />
+                                        <p className="text-xs font-black uppercase tracking-widest">No knowledge units indexed for this node.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-3">
+                                        {knowledge.map(k => (
+                                            <div key={k.id} className="p-6 rounded-3xl border border-foreground/10 bg-foreground/[0.01] hover:bg-foreground/[0.02] transition-all group relative">
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="flex items-center gap-2 opacity-30">
+                                                        <FileText size={12} />
+                                                        <span className="text-[9px] font-black uppercase tracking-widest">{timeAgo(k.createdAt)}</span>
+                                                    </div>
+                                                    <button onClick={() => removeKnowledge(k.id)} className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-500 transition-all">
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                                <p className="text-sm opacity-70 line-clamp-3 leading-relaxed whitespace-pre-wrap">{k.content}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </motion.div>
                     )}
 
                     {/* ── Conversation Logs ─────────────────────────── */}
                     {tab === "conversations" && (
-                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
                             <div className="flex items-center justify-between flex-wrap gap-4">
                                 <div>
-                                    <h1 className="text-3xl font-black uppercase tracking-tighter">Conversation Logs</h1>
-                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">{convTotal} total interactions</p>
+                                    <h1 className="text-4xl font-black uppercase tracking-tightest">Signals.</h1>
+                                    <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">Live Interaction Stream</p>
                                 </div>
                                 <div className="flex gap-3 items-center">
                                     <select
                                         value={filterProject}
                                         onChange={e => { setFilterProject(e.target.value); setConvPage(0); }}
-                                        className="bg-foreground/5 border border-foreground/10 rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-tighter outline-none"
+                                        className="bg-foreground/5 border border-foreground/10 rounded-2xl px-4 py-2.5 text-xs font-black uppercase tracking-tighter outline-none"
                                     >
-                                        <option value="">All Projects</option>
+                                        <option value="">ALL NODES</option>
                                         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
-                                    <button onClick={() => fetchConversations(convPage, filterProject)} className="p-2 opacity-40 hover:opacity-100 transition-opacity">
+                                    <button onClick={() => fetchConversations(convPage, filterProject)} className="p-2.5 bg-foreground/5 rounded-xl opacity-40 hover:opacity-100 transition-opacity">
                                         <RefreshCw size={16} />
                                     </button>
                                 </div>
                             </div>
 
                             {conversations.length === 0 ? (
-                                <div className="rounded-3xl border border-dashed border-foreground/20 p-16 text-center">
-                                    <MessageSquare size={40} className="mx-auto mb-5 opacity-20" />
-                                    <p className="text-xs font-black uppercase tracking-widest opacity-30">No conversations yet. Integrate a project to start logging.</p>
+                                <div className="rounded-[40px] border border-dashed border-foreground/10 p-20 text-center opacity-30">
+                                    <MessageSquare size={40} className="mx-auto mb-5" />
+                                    <p className="text-xs font-black uppercase tracking-widest">No active communication signals detected.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {conversations.map(c => (
-                                        <div key={c.id} className="p-5 rounded-3xl border border-foreground/10 space-y-4 hover:border-foreground/20 transition-colors">
+                                        <div key={c.id} className="p-8 rounded-[32px] border border-foreground/10 space-y-6 bg-foreground/[0.01] hover:border-foreground/30 transition-all group overflow-hidden">
                                             <div className="flex items-center justify-between">
-                                                <span className="text-[10px] font-black uppercase tracking-widest bg-foreground/5 px-3 py-1 rounded-full opacity-60">{c.project.name}</span>
-                                                <span className="text-[10px] opacity-30 font-bold uppercase tracking-widest">{timeAgo(c.createdAt)}</span>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <div className="flex gap-3">
-                                                    <div className="w-6 h-6 rounded-full bg-foreground/10 flex-shrink-0 flex items-center justify-center text-[10px] font-black opacity-50">U</div>
-                                                    <p className="text-sm font-medium opacity-70 leading-relaxed">{c.message}</p>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-accent bg-accent/10 px-3 py-1 rounded-full">{c.project.name}</span>
                                                 </div>
-                                                <div className="flex gap-3">
-                                                    <div className="w-6 h-6 rounded-full bg-accent/20 flex-shrink-0 flex items-center justify-center text-[10px] font-black text-accent">AI</div>
-                                                    <p className="text-sm font-medium opacity-70 leading-relaxed">{c.response}</p>
+                                                <span className="text-[10px] opacity-30 font-bold uppercase tracking-widest font-mono">{timeAgo(c.createdAt)}</span>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <div className="flex gap-5">
+                                                    <div className="w-8 h-8 rounded-full bg-foreground/5 flex-shrink-0 flex items-center justify-center text-[10px] font-black opacity-30">URS</div>
+                                                    <p className="text-sm font-medium opacity-90 leading-relaxed pt-1.5">{c.message}</p>
+                                                </div>
+                                                <div className="flex gap-5">
+                                                    <div className="w-8 h-8 rounded-full bg-accent/20 flex-shrink-0 flex items-center justify-center text-[10px] font-black text-accent shadow-[0_0_10px_rgba(59,130,246,0.2)]">AI</div>
+                                                    <p className="text-sm font-medium opacity-60 leading-relaxed pt-1.5">{c.response}</p>
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
-                                    {/* Pagination */}
                                     {convTotal > 20 && (
-                                        <div className="flex justify-center gap-3 pt-4">
-                                            <button disabled={convPage === 0} onClick={() => setConvPage(p => p - 1)} className="px-4 py-2 rounded-full border border-foreground/10 text-xs font-black uppercase tracking-tighter disabled:opacity-20 hover:bg-foreground/5 transition-colors">← Prev</button>
-                                            <span className="px-4 py-2 text-xs font-black uppercase tracking-tighter opacity-40">{convPage + 1} / {Math.ceil(convTotal / 20)}</span>
-                                            <button disabled={(convPage + 1) * 20 >= convTotal} onClick={() => setConvPage(p => p + 1)} className="px-4 py-2 rounded-full border border-foreground/10 text-xs font-black uppercase tracking-tighter disabled:opacity-20 hover:bg-foreground/5 transition-colors">Next →</button>
+                                        <div className="flex justify-center gap-3 pt-8">
+                                            <button disabled={convPage === 0} onClick={() => setConvPage(p => p - 1)} className="px-6 py-3 rounded-2xl border border-foreground/10 text-xs font-black uppercase tracking-tighter disabled:opacity-20 hover:bg-foreground/5 transition-colors">Prev</button>
+                                            <span className="flex items-center px-4 text-xs font-black uppercase tracking-tighter opacity-30">{convPage + 1} / {Math.ceil(convTotal / 20)}</span>
+                                            <button disabled={(convPage + 1) * 20 >= convTotal} onClick={() => setConvPage(p => p + 1)} className="px-6 py-3 rounded-2xl border border-foreground/10 text-xs font-black uppercase tracking-tighter disabled:opacity-20 hover:bg-foreground/5 transition-colors">Next</button>
                                         </div>
                                     )}
                                 </div>
@@ -483,113 +620,94 @@ export default function Dashboard() {
 
                     {/* ── API Docs ──────────────────────────────────── */}
                     {tab === "docs" && (
-                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
+                        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-12 pb-20">
                             <div>
-                                <h1 className="text-3xl font-black uppercase tracking-tighter">API Reference</h1>
-                                <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">Integrate OmniChat into any product</p>
+                                <h1 className="text-4xl font-black uppercase tracking-tightest">Synthetics.</h1>
+                                <p className="text-xs font-bold opacity-30 uppercase tracking-widest mt-1">Integration Protocol &amp; SDK Guidance</p>
+                            </div>
+
+                            {/* Public SDK */}
+                            <div className="p-10 rounded-[40px] border-2 border-accent/20 bg-accent/[0.03] space-y-8 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[100px] pointer-events-none" />
+                                <div className="relative z-10 space-y-6">
+                                    <div className="flex items-center gap-3">
+                                        <Globe size={24} className="text-accent" />
+                                        <h2 className="text-2xl font-black uppercase tracking-tighter">Universal UI SDK</h2>
+                                    </div>
+                                    <p className="text-sm opacity-60 leading-relaxed max-w-2xl">Deploy the OmniChat neural interface onto any web environment using a single script tag. The widget operates within a Shadow DOM for zero-latency CSS isolation.</p>
+                                    
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between px-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Add to &lt;head&gt; or &lt;body&gt;</span>
+                                        </div>
+                                        <CodeBlock lang="html" code={`<script>\n  window.OmniChatConfig = {\n    apiKey: "${projects[0]?.apiKey || "YOUR_API_KEY"}",\n    primaryColor: "#3b82f6"\n  };\n</script>\n<script src="https://universal-chatbot-psi.vercel.app/widget.js" async></script>`} />
+                                    </div>
+
+                                    <div className="grid md:grid-cols-3 gap-4 pt-4">
+                                        {[
+                                            { label: "apiKey", type: "string", desc: "Project specific identifier" },
+                                            { label: "primaryColor", type: "hex", desc: "UI primary brand color" },
+                                            { label: "position", type: "enum", desc: "bottom-right | bottom-left" },
+                                        ].map(opt => (
+                                            <div key={opt.label} className="p-5 rounded-2xl bg-foreground/5 space-y-1 border border-foreground/5">
+                                                <code className="text-xs font-black text-accent">{opt.label}</code>
+                                                <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest">{opt.type}</p>
+                                                <p className="text-[11px] opacity-40 leading-relaxed mt-1">{opt.desc}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Endpoint cards */}
-                            {[
-                                {
-                                    method: "POST", endpoint: "/api/v1/chat",
-                                    title: "Send a Message",
-                                    desc: "Send a user message to an OmniChat project. The AI will respond using the project's knowledge base and context.",
-                                    auth: "x-api-key header (your project API key)",
-                                    body: `{\n  "messages": [\n    { "role": "user", "content": "What are your office hours?" }\n  ],\n  "userId": "visitor-abc123"  // optional\n}`,
-                                    response: `{\n  "content": "Our office is open Mon-Fri, 9am to 6pm.",\n  "usage": { "tokens": 42 }\n}`,
-                                    code: `fetch("https://universal-chatbot-psi.vercel.app/api/v1/chat", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "x-api-key": "YOUR_API_KEY"\n  },\n  body: JSON.stringify({\n    messages: [{ role: "user", content: "Hello!" }]\n  })\n}).then(r => r.json()).then(console.log);`,
-                                },
-                            ].map((ep, i) => (
-                                <div key={i} className="rounded-3xl border border-foreground/10 overflow-hidden">
-                                    <div className="p-6 border-b border-foreground/10 flex items-center gap-4">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-accent bg-accent/10 px-3 py-1 rounded-full">{ep.method}</span>
-                                        <code className="text-sm font-black opacity-60">{ep.endpoint}</code>
-                                    </div>
-                                    <div className="p-6 grid md:grid-cols-2 gap-8">
-                                        <div className="space-y-5">
-                                            <div>
-                                                <h3 className="text-lg font-black uppercase tracking-tighter mb-2">{ep.title}</h3>
-                                                <p className="text-sm opacity-50 leading-relaxed">{ep.desc}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2">Authentication</p>
-                                                <p className="text-xs font-bold opacity-60 bg-foreground/5 px-3 py-2 rounded-xl">{ep.auth}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2">Request Body</p>
-                                                <CodeBlock code={ep.body} lang="json" />
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2">Response</p>
-                                                <CodeBlock code={ep.response} lang="json" />
-                                            </div>
+                            <div className="space-y-6">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30 px-2">Neural API Reference</h3>
+                                {[
+                                    {
+                                        method: "POST", endpoint: "/api/v1/chat",
+                                        title: "Sync Intelligence",
+                                        desc: "Atomic POST request to the neural processing cluster. Returns AI inference based on project context.",
+                                        auth: "x-api-key head authorization",
+                                        body: `{\n  "messages": [\n    { "role": "user", "content": "What's the status?" }\n  ],\n  "userId": "system-user-01"\n}`,
+                                        response: `{\n  "content": "All systems operational.",\n  "usage": { "tokens": 24 }\n}`,
+                                        code: `fetch("https://universal-chatbot-psi.vercel.app/api/v1/chat", {\n  method: "POST",\n  headers: {\n    "Content-Type": "application/json",\n    "x-api-key": "YOUR_API_KEY"\n  },\n  body: JSON.stringify({\n    messages: [{ role: "user", content: "Query" }]\n  })\n})`,
+                                    },
+                                ].map((ep, i) => (
+                                    <div key={i} className="rounded-[40px] border border-foreground/10 overflow-hidden nano-glass">
+                                        <div className="p-8 border-b border-foreground/10 flex items-center gap-6">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-accent bg-accent/10 px-4 py-2 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.2)]">{ep.method}</span>
+                                            <code className="text-sm font-black opacity-60 tracking-widest font-mono">{ep.endpoint}</code>
                                         </div>
-                                        <div className="space-y-5">
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase tracking-widest opacity-30 mb-2">JavaScript Example</p>
-                                                <CodeBlock code={ep.code} lang="javascript" />
-                                            </div>
-                                            {projects.length > 0 && (
-                                                <div className="rounded-2xl bg-accent/5 border border-accent/20 p-4 space-y-3">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-accent">Your Projects</p>
-                                                    {projects.map(p => (
-                                                        <div key={p.id} className="flex items-center justify-between">
-                                                            <span className="text-xs font-bold opacity-60">{p.name}</span>
-                                                            <button onClick={() => copyKey(p.apiKey)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">
-                                                                {copiedKey === p.apiKey ? <Check size={10} className="text-green-500" /> : <Copy size={10} />}
-                                                                Copy Key
-                                                            </button>
-                                                        </div>
-                                                    ))}
+                                        <div className="p-10 grid md:grid-cols-2 gap-12">
+                                            <div className="space-y-8">
+                                                <div>
+                                                    <h3 className="text-2xl font-black uppercase tracking-tightest mb-3">{ep.title}</h3>
+                                                    <p className="text-sm opacity-50 leading-relaxed">{ep.desc}</p>
                                                 </div>
-                                            )}
+                                                <div className="space-y-4">
+                                                    <div className="p-5 rounded-2xl bg-foreground/5 border border-foreground/5 space-y-1">
+                                                        <p className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-2">Auth Header</p>
+                                                        <p className="text-xs font-bold opacity-80">x-api-key: [Your Module Token]</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-2 ml-1">Payload Schema</p>
+                                                        <CodeBlock code={ep.body} lang="json" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-8">
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-3 ml-1">Response Sample</p>
+                                                    <CodeBlock code={ep.response} lang="json" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest opacity-30 mb-3 ml-1">Implementation Logic</p>
+                                                    <CodeBlock code={ep.code} lang="js" />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-
-                            {/* SDK section */}
-                            <div className="rounded-3xl border border-foreground/10 p-8 space-y-6">
-                                <h2 className="text-xl font-black uppercase tracking-tighter">Web SDK</h2>
-                                <p className="text-sm opacity-50 leading-relaxed">Embed the OmniChat widget directly into any website with a single script tag. The widget uses Shadow DOM for full CSS isolation.</p>
-                                <CodeBlock lang="html" code={`<!-- Add to your HTML <head> -->\n<script>\n  window.OmniChatConfig = {\n    apiKey: "YOUR_API_KEY",\n    primaryColor: "#3b82f6",\n    position: "bottom-right"\n  };\n</script>\n<script src="https://universal-chatbot-psi.vercel.app/embed/widget.js" async></script>`} />
-                                <div className="grid md:grid-cols-3 gap-4 pt-2">
-                                    {[
-                                        { label: "apiKey", type: "string", desc: "Your project API key" },
-                                        { label: "primaryColor", type: "string", desc: "Hex color for chat bubble" },
-                                        { label: "position", type: "string", desc: '"bottom-right" or "bottom-left"' },
-                                    ].map(opt => (
-                                        <div key={opt.label} className="p-4 rounded-2xl bg-foreground/5">
-                                            <code className="text-xs font-black">{opt.label}</code>
-                                            <span className="text-[10px] opacity-40 ml-2">{opt.type}</span>
-                                            <p className="text-[10px] opacity-50 mt-1">{opt.desc}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Rate limits */}
-                            <div className="rounded-3xl border border-foreground/10 p-8 space-y-5">
-                                <h2 className="text-xl font-black uppercase tracking-tighter">Rate Limits &amp; Plans</h2>
-                                <div className="grid md:grid-cols-3 gap-4">
-                                    {[
-                                        { plan: "Free", tokens: "10,000 / mo", rpm: "10 req/min", color: "border-foreground/10" },
-                                        { plan: "Pro", tokens: "100,000 / mo", rpm: "60 req/min", color: "border-accent/50", active: true },
-                                        { plan: "Enterprise", tokens: "Unlimited", rpm: "Unlimited", color: "border-foreground/10" },
-                                    ].map(pl => (
-                                        <div key={pl.plan} className={`p-5 rounded-2xl border ${pl.color} ${pl.active ? "bg-accent/5" : ""}`}>
-                                            <div className="flex items-center justify-between mb-4">
-                                                <span className="text-xs font-black uppercase tracking-tighter">{pl.plan}</span>
-                                                {pl.active && <span className="text-[9px] font-black uppercase tracking-widest text-accent bg-accent/10 px-2 py-0.5 rounded-full">Your Plan</span>}
-                                            </div>
-                                            <div className="space-y-2">
-                                                <div className="text-xs opacity-60"><span className="font-black opacity-100">{pl.tokens}</span> tokens</div>
-                                                <div className="text-xs opacity-60"><span className="font-black opacity-100">{pl.rpm}</span></div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                ))}
                             </div>
                         </motion.div>
                     )}

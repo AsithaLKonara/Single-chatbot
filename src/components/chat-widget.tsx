@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, Send, X, Minus, Globe } from "lucide-react";
+import { MessageCircle, Send, X, Minus, Globe, Zap, Command, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSystemContext } from "@/lib/context";
 import { clsx, type ClassValue } from "clsx";
@@ -32,82 +32,106 @@ export function ChatWidget({
     const sendMessage = async () => {
         if (!input.trim() || loading) return;
         const newMsgs = [...messages, { role: "user", content: input }];
-        setMessages(newMsgs); setInput(""); setLoading(true);
+        setMessages(newMsgs); 
+        setInput(""); 
+        setLoading(true);
         try {
             const res = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: newMsgs, context: getSystemContext(), projectId, userId: "guest" }),
+                body: JSON.stringify({ 
+                    messages: newMsgs, 
+                    context: getSystemContext(), 
+                    projectId, 
+                    userId: "guest" 
+                }),
             });
             const data = await res.json();
-            setMessages([...newMsgs, { role: "assistant", content: data.content }]);
-        } finally { setLoading(false); }
+            if (data.content) {
+                setMessages([...newMsgs, { role: "assistant", content: data.content }]);
+            }
+        } catch (e) {
+            console.error("Chat error:", e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div
-            className="fixed bottom-6 right-6 z-[9999] font-sans"
+            className="fixed bottom-6 right-6 z-[9999] font-sans selection:bg-white/20"
             style={{ "--primary": primaryColor } as any}
         >
             <AnimatePresence>
                 {isOpen ? (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="chatbot-window w-[380px] h-[520px] shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] flex flex-col overflow-hidden relative"
+                        initial={{ opacity: 0, scale: 0.9, y: 24, filter: "blur(10px)" }}
+                        animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+                        exit={{ opacity: 0, scale: 0.9, y: 24, filter: "blur(10px)" }}
+                        className="chatbot-window w-[380px] h-[580px] flex flex-col overflow-hidden relative shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
                         style={{
-                            background: "rgba(255, 255, 255, 0.45)",
-                            backdropFilter: "blur(12px) saturate(180%)",
-                            WebkitBackdropFilter: "blur(12px) saturate(180%)",
-                            borderRadius: "24px",
-                            border: "1px solid rgba(255, 255, 255, 0.3)",
+                            background: "rgba(9, 9, 11, 0.85)",
+                            backdropFilter: "blur(32px) saturate(200%)",
+                            borderRadius: "32px",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
                         }}
                     >
+                        {/* Status bar */}
+                        <div className="px-5 py-2 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">Secure Connection Established</span>
+                            </div>
+                            <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">v4.2-Neural</span>
+                        </div>
+
                         {/* Header */}
-                        <div className="p-5 flex justify-between items-center border-b border-white/20 bg-white/10">
-                            <div className="flex items-center gap-3">
-                                <div className="relative">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white shadow-lg">
-                                        <Globe size={20} />
-                                    </div>
-                                    <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white/50 rounded-full animate-pulse" />
+                        <div className="p-6 flex justify-between items-center border-b border-white/5 bg-gradient-to-b from-white/5 to-transparent">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-white border border-white/10 group shadow-2xl">
+                                    <Bot size={24} className="group-hover:scale-110 transition-transform" />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-zinc-900 text-sm leading-tight">OmniChat AI</h3>
-                                    <span className="text-[10px] text-zinc-600 font-medium tracking-wide uppercase">Always Active</span>
+                                    <h3 className="font-black text-white text-base leading-tight uppercase tracking-tighter">OmniChat AI</h3>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                        <div className="w-1 h-1 rounded-full bg-emerald-500" />
+                                        <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Synthetic Intelligence</span>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="flex gap-1">
-                                <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/20 rounded-full transition-colors text-zinc-700">
-                                    <Minus size={18} />
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsOpen(false)} className="p-2.5 hover:bg-white/5 rounded-2xl transition-all text-white/40 hover:text-white">
+                                    <Minus size={20} />
                                 </button>
-                                <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-white/20 rounded-full transition-colors text-zinc-700">
-                                    <X size={18} />
+                                <button onClick={() => setIsOpen(false)} className="p-2.5 hover:bg-white/5 rounded-2xl transition-all text-white/40 hover:text-white">
+                                    <X size={20} />
                                 </button>
                             </div>
                         </div>
 
-                        {/* Messages */}
-                        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
+                        {/* Messages Area */}
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
                             {messages.length === 0 && (
-                                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-500">
-                                    <p className="text-sm font-medium">Hello! How can I assist you today?</p>
+                                <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-30 space-y-4">
+                                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-2">
+                                        <Command size={32} />
+                                    </div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] leading-loose">OmniChat Core Online.<br/>Awaiting Input Protocol...</p>
                                 </div>
                             )}
                             {messages.map((m, i) => (
                                 <motion.div
-                                    initial={{ opacity: 0, x: m.role === "user" ? 10 : -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
+                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
                                     key={i}
                                     className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
                                 >
                                     <div
                                         className={cn(
-                                            "max-w-[85%] px-4 py-3 text-sm shadow-sm",
+                                            "max-w-[85%] px-5 py-4 text-sm leading-relaxed",
                                             m.role === "user"
-                                                ? "bg-[var(--primary)] text-white rounded-2xl rounded-tr-none"
-                                                : "bg-white/60 backdrop-blur-md border border-white/40 text-zinc-800 rounded-2xl rounded-tl-none"
+                                                ? "bg-white text-black font-semibold rounded-[24px] rounded-tr-sm shadow-xl"
+                                                : "bg-white/5 border border-white/10 text-white/90 rounded-[24px] rounded-tl-sm backdrop-blur-sm"
                                         )}
                                     >
                                         {m.content}
@@ -116,21 +140,21 @@ export function ChatWidget({
                             ))}
                             {loading && (
                                 <div className="flex justify-start">
-                                    <div className="bg-white/60 backdrop-blur-md border border-white/40 px-4 py-2 rounded-2xl rounded-tl-none flex gap-1">
-                                        <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" />
-                                        <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-                                        <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                    <div className="bg-white/5 border border-white/10 px-5 py-3 rounded-2xl flex gap-1.5 items-center">
+                                        <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce" />
+                                        <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                        <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce [animation-delay:0.4s]" />
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-4 bg-white/10 backdrop-blur-sm border-t border-white/20">
-                            <div className="relative flex items-center gap-2 bg-white/40 border border-white/60 rounded-2xl p-1 shadow-inner focus-within:border-blue-400/50 transition-all">
+                        <div className="p-6 bg-gradient-to-t from-white/5 to-transparent border-t border-white/5">
+                            <div className="relative flex items-center gap-3 bg-white/[0.03] border border-white/10 rounded-[28px] p-2 pr-2.5 shadow-2xl focus-within:border-white/20 focus-within:bg-white/[0.05] transition-all group">
                                 <input
-                                    className="flex-1 bg-transparent px-4 py-2 text-sm text-zinc-800 placeholder-zinc-500 outline-none"
-                                    placeholder="Type a message..."
+                                    className="flex-1 bg-transparent px-5 py-3 text-sm text-white placeholder-white/20 outline-none font-medium"
+                                    placeholder="Type signal..."
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && sendMessage()}
@@ -138,10 +162,14 @@ export function ChatWidget({
                                 <button
                                     onClick={sendMessage}
                                     disabled={!input.trim() || loading}
-                                    className="bg-[var(--primary)] text-white p-2.5 rounded-xl hover:opacity-90 transition-all disabled:opacity-50 disabled:grayscale ring-offset-2 focus:ring-2 ring-blue-500"
+                                    className="w-12 h-12 bg-white text-black rounded-[22px] hover:scale-105 active:scale-95 transition-all disabled:opacity-20 disabled:scale-100 flex items-center justify-center shadow-lg group-focus-within:shadow-[0_0_20px_rgba(255,255,255,0.2)]"
                                 >
                                     <Send size={18} />
                                 </button>
+                            </div>
+                            <div className="mt-4 flex justify-center items-center gap-2 opacity-10 cursor-default hover:opacity-25 transition-opacity">
+                                <Zap size={8} className="fill-current" />
+                                <span className="text-[8px] font-black uppercase tracking-[0.4em]">Powered by OmniChat Systems</span>
                             </div>
                         </div>
                     </motion.div>
@@ -149,14 +177,14 @@ export function ChatWidget({
                     <motion.button
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        whileHover={{ scale: 1.1 }}
+                        whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setIsOpen(true)}
-                        className="bg-white/40 backdrop-blur-xl border border-white/60 text-white p-4 rounded-full shadow-2xl relative group"
+                        className="w-16 h-16 bg-white text-black rounded-[22px] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] flex items-center justify-center group relative overflow-hidden"
                     >
-                        <div className="absolute inset-0 rounded-full bg-[var(--primary)] opacity-80 group-hover:opacity-100 transition-opacity" />
-                        <MessageCircle size={32} className="relative z-10" />
-                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-white rounded-full z-20" />
+                        <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-10 transition-opacity" />
+                        <MessageCircle size={28} className="relative z-10" />
+                        <div className="absolute top-3 right-3 w-3 h-3 bg-red-500 border-2 border-white rounded-full z-20 shadow-lg" />
                     </motion.button>
                 )}
             </AnimatePresence>

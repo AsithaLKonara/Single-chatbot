@@ -1,17 +1,21 @@
 import { groq } from "@/lib/groq";
-import { supabase } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
     try {
-        const { messages, context, projectId, userId } = await req.json();
+        const { messages, context, projectId, userId = "guest" } = await req.json();
 
         let knowledge = "";
         if (projectId) {
-            const { data } = await supabase.from("knowledge").select("content").eq("project_id", projectId).limit(3);
-            knowledge = data?.map(d => d.content).join("\n") || "";
+            const data = await prisma.knowledge.findMany({
+                where: { projectId },
+                take: 5,
+                orderBy: { createdAt: "desc" }
+            });
+            knowledge = data.map(d => d.content).join("\n") || "";
         }
 
         const response = await groq.chat.completions.create({
@@ -19,26 +23,40 @@ export async function POST(req: Request) {
             messages: [
                 {
                     role: "system",
-                    content: `Concise assistant. Knowledge: ${knowledge}. Context: ${JSON.stringify(context || {})}`
+                    content: `You are an AI assistant. Context: ${JSON.stringify(context || {})}. Use provided knowledge: ${knowledge}. Be concise.`
                 },
-                ...messages.slice(-3),
+                ...messages.slice(-5),
             ],
-            max_completion_tokens: 200,
-            temperature: 0.5,
+            max_completion_tokens: 400,
+            temperature: 0.7,
         });
 
         const content = response.choices[0].message.content;
-        if (projectId && userId && content) {
-            await supabase.from("conversations").insert({
-                project_id: projectId,
-                user_id: userId,
-                message: messages[messages.length - 1].content,
-                response: content,
-            });
+        const tokens = response.usage?.total_tokens || 0;
+
+        if (projectId && content) {
+            // Track usage and log conversation asynchronously
+            await prisma.$transaction([
+                prisma.conversation.create({
+                    data: {
+                        projectId,
+                        userId,
+                        message: messages[messages.length - 1].content,
+                        response: content,
+                    }
+                }),
+                prisma.usage.create({
+                    data: {
+                        projectId,
+                        tokens
+                    }
+                })
+            ]);
         }
 
-        return NextResponse.json({ content });
+        return NextResponse.json({ content, usage: { tokens } });
     } catch (error) {
-        return NextResponse.json({ error: "Failed to fetch AI response" }, { status: 500 });
+        console.error("Internal API error:", error);
+        return NextResponse.json({ error: "Cognition Fault" }, { status: 500 });
     }
 }
