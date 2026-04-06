@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Project { id: string; name: string; apiKey: string; conversations: number; tokens: number; createdAt: string; }
@@ -601,7 +602,17 @@ export default function Dashboard() {
                                                 </div>
                                                 <div className="flex gap-5">
                                                     <div className="w-8 h-8 rounded-full bg-accent/20 flex-shrink-0 flex items-center justify-center text-[10px] font-black text-accent shadow-[0_0_10px_rgba(59,130,246,0.2)]">AI</div>
-                                                    <p className="text-sm font-medium opacity-60 leading-relaxed pt-1.5">{c.response}</p>
+                                                    <div className="text-sm font-medium opacity-60 leading-relaxed pt-1.5 prose-invert max-w-none">
+                                                        <ReactMarkdown 
+                                                            components={{
+                                                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                                                ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                                                                ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2" {...props} />,
+                                                            }}
+                                                        >
+                                                            {c.response}
+                                                        </ReactMarkdown>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getSystemContext } from "@/lib/context";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -27,11 +29,12 @@ export function ChatWidget({
 
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, [messages]);
+    }, [messages, loading]);
 
     const sendMessage = async () => {
         if (!input.trim() || loading) return;
-        const newMsgs = [...messages, { role: "user", content: input }];
+        const userMsg = input.trim();
+        const newMsgs = [...messages, { role: "user", content: userMsg }];
         setMessages(newMsgs); 
         setInput(""); 
         setLoading(true);
@@ -68,7 +71,7 @@ export function ChatWidget({
                         initial={{ opacity: 0, scale: 0.9, y: 24, filter: "blur(10px)" }}
                         animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
                         exit={{ opacity: 0, scale: 0.9, y: 24, filter: "blur(10px)" }}
-                        className="chatbot-window w-[380px] h-[580px] flex flex-col overflow-hidden relative shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
+                        className="chatbot-window w-[380px] md:w-[420px] h-[600px] flex flex-col overflow-hidden relative shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]"
                         style={{
                             background: "rgba(9, 9, 11, 0.85)",
                             backdropFilter: "blur(32px) saturate(200%)",
@@ -80,9 +83,9 @@ export function ChatWidget({
                         <div className="px-5 py-2 bg-white/5 border-b border-white/5 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">Secure Connection Established</span>
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">Secure Sync Active</span>
                             </div>
-                            <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">v4.2-Neural</span>
+                            <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">v4.5-Neural</span>
                         </div>
 
                         {/* Header */}
@@ -95,7 +98,7 @@ export function ChatWidget({
                                     <h3 className="font-black text-white text-base leading-tight uppercase tracking-tighter">OmniChat AI</h3>
                                     <div className="flex items-center gap-1.5 mt-0.5">
                                         <div className="w-1 h-1 rounded-full bg-emerald-500" />
-                                        <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Synthetic Intelligence</span>
+                                        <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Neural Cluster #A1</span>
                                     </div>
                                 </div>
                             </div>
@@ -110,13 +113,13 @@ export function ChatWidget({
                         </div>
 
                         {/* Messages Area */}
-                        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+                        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide scroll-smooth">
                             {messages.length === 0 && (
                                 <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-30 space-y-4">
-                                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-2">
+                                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-2 animate-pulse">
                                         <Command size={32} />
                                     </div>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] leading-loose">OmniChat Core Online.<br/>Awaiting Input Protocol...</p>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] leading-loose">OmniChat Core Online.<br/>Awaiting Identity Handshake...</p>
                                 </div>
                             )}
                             {messages.map((m, i) => (
@@ -128,13 +131,27 @@ export function ChatWidget({
                                 >
                                     <div
                                         className={cn(
-                                            "max-w-[85%] px-5 py-4 text-sm leading-relaxed",
+                                            "max-w-[90%] px-5 py-4 text-sm leading-[1.6]",
                                             m.role === "user"
                                                 ? "bg-white text-black font-semibold rounded-[24px] rounded-tr-sm shadow-xl"
-                                                : "bg-white/5 border border-white/10 text-white/90 rounded-[24px] rounded-tl-sm backdrop-blur-sm"
+                                                : "bg-white/5 border border-white/10 text-white/90 rounded-[24px] rounded-tl-sm backdrop-blur-sm prose-invert"
                                         )}
                                     >
-                                        {m.content}
+                                        <ReactMarkdown 
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                                                ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                                                ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2" {...props} />,
+                                                li: ({node, ...props}) => <li className="mb-1" {...props} />,
+                                                h1: ({node, ...props}) => <h1 className="text-lg font-black uppercase tracking-tight mb-2" {...props} />,
+                                                h2: ({node, ...props}) => <h2 className="text-base font-black uppercase tracking-tight mb-2" {...props} />,
+                                                code: ({node, ...props}) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />,
+                                                pre: ({node, ...props}) => <pre className="bg-white/5 p-3 rounded-xl overflow-x-auto text-[13px] font-mono mb-2" {...props} />,
+                                            }}
+                                        >
+                                            {m.content}
+                                        </ReactMarkdown>
                                     </div>
                                 </motion.div>
                             ))}
@@ -154,7 +171,7 @@ export function ChatWidget({
                             <div className="relative flex items-center gap-3 bg-white/[0.03] border border-white/10 rounded-[28px] p-2 pr-2.5 shadow-2xl focus-within:border-white/20 focus-within:bg-white/[0.05] transition-all group">
                                 <input
                                     className="flex-1 bg-transparent px-5 py-3 text-sm text-white placeholder-white/20 outline-none font-medium"
-                                    placeholder="Type signal..."
+                                    placeholder="Type neural signal..."
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && sendMessage()}
@@ -169,7 +186,7 @@ export function ChatWidget({
                             </div>
                             <div className="mt-4 flex justify-center items-center gap-2 opacity-10 cursor-default hover:opacity-25 transition-opacity">
                                 <Zap size={8} className="fill-current" />
-                                <span className="text-[8px] font-black uppercase tracking-[0.4em]">Powered by OmniChat Systems</span>
+                                <span className="text-[8px] font-black uppercase tracking-[0.4em]">Integrated Intelligence by OmniChat</span>
                             </div>
                         </div>
                     </motion.div>
@@ -180,7 +197,7 @@ export function ChatWidget({
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setIsOpen(true)}
-                        className="w-16 h-16 bg-white text-black rounded-[22px] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] flex items-center justify-center group relative overflow-hidden"
+                        className="w-16 h-16 bg-white text-black rounded-[24px] shadow-[0_20px_40px_-10px_rgba(0,0,0,0.5)] flex items-center justify-center group relative overflow-hidden"
                     >
                         <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-10 transition-opacity" />
                         <MessageCircle size={28} className="relative z-10" />
