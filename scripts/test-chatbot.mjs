@@ -5,17 +5,19 @@ async function testIntegration() {
     console.log("Initializing E2E AI Test...");
     const req = {
         json: async () => ({
+            message: "What is 2+2?",
             messages: [{ role: "user", content: "What is 2+2?" }],
             context: { page: "/home" },
-            projectId: null,
-            userId: null
+            session_id: "test-session",
+            userId: "test-user"
         })
     };
     
-    // @ts-ignore
+    // @ts-expect-error test harness mock request object
     const response = await POST(req);
-    const data = await response.json();
-    console.log("Chatbot AI Response:", data);
+    const content = await response.text();
+    console.log("Session:", response.headers.get("X-Session-Id"));
+    console.log("Chatbot AI Response:", content);
 }
 
 testIntegration();

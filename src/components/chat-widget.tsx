@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, Send, X, Minus, Globe, Zap, Command, Bot } from "lucide-react";
+import { MessageCircle, Send, X, Minus, Zap, Command, Bot } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getSystemContext } from "@/lib/context";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { CSSProperties } from "react";
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -14,18 +15,31 @@ function cn(...inputs: ClassValue[]) {
 
 export function ChatWidget({
     defaultOpen = false,
-    projectId,
     primaryColor = "#3b82f6"
 }: {
     defaultOpen?: boolean,
-    projectId?: string,
     primaryColor?: string
 }) {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
+    const [sessionId, setSessionId] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
+    const widgetStyle: CSSProperties & { "--primary": string } = { "--primary": primaryColor };
+
+    useEffect(() => {
+        const key = "omnichat_session_id";
+        const existing = localStorage.getItem(key);
+        if (existing) {
+            setSessionId(existing);
+            return;
+        }
+
+        const created = crypto.randomUUID();
+        localStorage.setItem(key, created);
+        setSessionId(created);
+    }, []);
 
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -45,13 +59,34 @@ export function ChatWidget({
                 body: JSON.stringify({ 
                     messages: newMsgs, 
                     context: getSystemContext(), 
-                    projectId, 
+                    session_id: sessionId || undefined,
                     userId: "guest" 
                 }),
             });
-            const data = await res.json();
-            if (data.content) {
-                setMessages([...newMsgs, { role: "assistant", content: data.content }]);
+            const returnedSessionId = res.headers.get("X-Session-Id");
+            if (returnedSessionId && returnedSessionId !== sessionId) {
+                localStorage.setItem("omnichat_session_id", returnedSessionId);
+                setSessionId(returnedSessionId);
+            }
+
+            if (!res.body) return;
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantContent = "";
+            setMessages([...newMsgs, { role: "assistant", content: "" }]);
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                assistantContent += decoder.decode(value, { stream: true });
+                setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last?.role === "assistant") {
+                        updated[updated.length - 1] = { ...last, content: assistantContent };
+                    }
+                    return updated;
+                });
             }
         } catch (e) {
             console.error("Chat error:", e);
@@ -61,10 +96,7 @@ export function ChatWidget({
     };
 
     return (
-        <div
-            className="fixed bottom-6 right-6 z-[9999] font-sans selection:bg-white/20"
-            style={{ "--primary": primaryColor } as any}
-        >
+        <div className="fixed bottom-6 right-6 z-[9999] font-sans selection:bg-white/20" style={widgetStyle}>
             <AnimatePresence>
                 {isOpen ? (
                     <motion.div
@@ -140,14 +172,14 @@ export function ChatWidget({
                                         <ReactMarkdown 
                                             remarkPlugins={[remarkGfm]}
                                             components={{
-                                                p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                                                ul: ({node, ...props}) => <ul className="list-disc ml-4 mb-2" {...props} />,
-                                                ol: ({node, ...props}) => <ol className="list-decimal ml-4 mb-2" {...props} />,
-                                                li: ({node, ...props}) => <li className="mb-1" {...props} />,
-                                                h1: ({node, ...props}) => <h1 className="text-lg font-black uppercase tracking-tight mb-2" {...props} />,
-                                                h2: ({node, ...props}) => <h2 className="text-base font-black uppercase tracking-tight mb-2" {...props} />,
-                                                code: ({node, ...props}) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />,
-                                                pre: ({node, ...props}) => <pre className="bg-white/5 p-3 rounded-xl overflow-x-auto text-[13px] font-mono mb-2" {...props} />,
+                                                p: (props) => <p className="mb-2 last:mb-0" {...props} />,
+                                                ul: (props) => <ul className="list-disc ml-4 mb-2" {...props} />,
+                                                ol: (props) => <ol className="list-decimal ml-4 mb-2" {...props} />,
+                                                li: (props) => <li className="mb-1" {...props} />,
+                                                h1: (props) => <h1 className="text-lg font-black uppercase tracking-tight mb-2" {...props} />,
+                                                h2: (props) => <h2 className="text-base font-black uppercase tracking-tight mb-2" {...props} />,
+                                                code: (props) => <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />,
+                                                pre: (props) => <pre className="bg-white/5 p-3 rounded-xl overflow-x-auto text-[13px] font-mono mb-2" {...props} />,
                                             }}
                                         >
                                             {m.content}

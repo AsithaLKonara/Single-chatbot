@@ -1,22 +1,22 @@
 import { supabase } from "./supabase";
 
-export async function saveMessage(projectId: string, userId: string, message: string, response: string) {
+export async function saveMessage(sessionId: string, userId: string, message: string, response: string) {
     await supabase.from("conversations").insert({
-        project_id: projectId,
+        session_id: sessionId,
         user_id: userId,
         message,
         response,
     });
 }
 
-export async function getHistory(projectId: string, userId: string) {
+export async function getHistory(sessionId: string, userId: string) {
     const { data } = await supabase
         .from("conversations")
         .select("message, response")
-        .eq("project_id", projectId)
+        .eq("session_id", sessionId)
         .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(3);
+        .order("timestamp", { ascending: false })
+        .limit(8);
 
-    return data || [];
+    return (data || []).reverse();
 }
