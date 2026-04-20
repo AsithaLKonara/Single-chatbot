@@ -36,7 +36,9 @@ export function ChatWidget({
             return;
         }
 
-        const created = crypto.randomUUID();
+        const created = typeof crypto.randomUUID === "function" 
+            ? crypto.randomUUID() 
+            : Math.random().toString(36).substring(2) + Date.now().toString(36);
         localStorage.setItem(key, created);
         setSessionId(created);
     }, []);
