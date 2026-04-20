@@ -1,22 +1,20 @@
 import { supabase } from "./supabase";
 
-type EmbeddingCacheRow = {
-    embedding: number[] | null;
-};
-
+// Retrieve a cached embedding from the EmbeddingCache table
 export async function getCachedEmbedding(text: string): Promise<number[] | null> {
     const { data, error } = await supabase
-        .from("embeddings_cache")
+        .from("embedding_cache")
         .select("embedding")
         .eq("text", text)
-        .maybeSingle<EmbeddingCacheRow>();
+        .maybeSingle();
 
-    if (error || !data?.embedding) return null;
-    return data.embedding;
+    if (error || !data) return null;
+    return data.embedding as number[];
 }
 
-export async function storeEmbeddingCache(text: string, embedding: number[]) {
+// Store an embedding in the cache
+export async function setCachedEmbedding(text: string, embedding: number[]): Promise<void> {
     await supabase
-        .from("embeddings_cache")
+        .from("embedding_cache")
         .upsert({ text, embedding }, { onConflict: "text" });
 }

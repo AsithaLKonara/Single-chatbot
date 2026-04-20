@@ -1,45 +1,98 @@
-# OmniChat - Single Application AI Chatbot
+# 🤖 OmniChat — Business Automation Agent
 
-OmniChat is a context-aware chatbot integrated directly into one web application.
-It uses RAG retrieval, conversation memory, and Groq inference to deliver accurate responses.
+OmniChat is a sophisticated **Business Automation AI Agent** designed to run on **WhatsApp**, **WooCommerce**, and your **Web Dashboard**. It transforms customer support and sales by integrating directly with your store's logic and courier services.
 
-## Architecture
+---
 
-```text
-Web App
- -> Chat Widget
- -> /api/chat
- -> Context Engine
- -> RAG Retrieval
- -> Groq AI
- -> Response
+## 🏗️ High-Level Architecture
+
+OmniChat operates at the intersection of AI intelligence and business execution.
+
+```mermaid
+graph TD
+    User((WhatsApp / Web User)) <--> WA[WhatsApp / Web Gateway]
+    WA <--> Webhook[Webhook & API Handler]
+    Webhook <--> Core[Orchestration Engine]
+    Core <--> Intent[Intent Classifier]
+    Core <--> Groq[Groq Llama-3.3 Intelligence]
+    Core <--> RAG[Knowledge Base / RAG]
+    Core <--> Tools[Business Tools]
+    Tools <--> WC[WooCommerce Store]
+    Tools <--> CR[Courier Tracking]
+    Core <--> Memory[Smart Memory & Context]
+    Memory <--> Redis[Upstash Redis Queue]
 ```
 
-## Core Capabilities
+---
 
-- Context-aware responses from browser/application metadata
-- Knowledge retrieval with Supabase + pgvector
-- Session memory with conversation history
-- Groq Llama model integration
-- Internal dashboard for knowledge and conversation monitoring
+## 🌟 Core Capabilities
 
-## Data Model (simplified)
+### 🧠 AI Intelligence
+*   **Intent Detection**: Automatically identifies user goals (e.g., product search, order tracking, returns).
+*   **Real-Time RAG**: Context-aware responses using semantic search over store policies, FAQs, and catalogs.
+*   **Groq-Powered**: Lightning-fast inference using Llama-3.3-70b for natural, safe, and grounded conversations.
 
-- `knowledge`: `id`, `content`, `embedding`, `metadata`, `timestamp`
-- `conversations`: `id`, `session_id`, `user_id`, `message`, `response`, `timestamp`
-- `sessions` (optional): `id`, `user_id`, `created_at`
+### 🛒 Business Automation
+*   **WooCommerce Integration**: Direct access to search products, retrieve order status, and create returns.
+*   **Courier Tracking**: Real-time tracking for DHL and local courier services.
+*   **Proactive Engine**: Automated WhatsApp triggers for delivery follow-ups, shipping delays, and re-order nudges.
 
-## Getting Started
+### 📱 Channel Reach
+*   **WhatsApp Business**: Full two-way communication gateway with interactive button support.
+*   **Web Widget**: A sleek, nano-styled chat widget for your website.
 
-1. Install dependencies: `npm install`
-2. Configure env values in `.env.local` (`GROQ_API_KEY`, Supabase keys)
-3. Start local server: `npm run dev`
-4. Open the app and chat through `/api/chat`
+### 📊 Admin Control
+*   **Premium Dashboard**: Monitor live conversations, track automation success, and view system health.
+*   **Knowledge Manager**: Direct UI to upload, vectorize, and manage the AI's internal knowledge base.
 
-## Product Direction
+---
 
-This project is intentionally **single-instance**:
-- No project management
-- No per-project API keys
-- No multi-tenant routing
+## 🛠️ Technical Stack
 
+*   **Frontend**: Next.js 16 (App Router), Tailwind CSS (Nano Design)
+*   **Intelligence**: Groq SDK (Llama-3.3-70b-versatile, Nomic-Embed-Text)
+*   **Database**: Supabase (PostgreSQL + pgvector), Prisma ORM
+*   **Hardening**: Upstash (Redis Queue & Rate Limiting)
+*   **Integrations**: WhatsApp Business API, WooCommerce REST v3, DHL Tracking API
+
+---
+
+## 🚀 Getting Started
+
+### 1. Prerequisites
+*   Node.js 20+
+*   Supabase Project (with pgvector enabled)
+*   Groq API Key
+*   Meta Developer Account (for WhatsApp)
+*   WooCommerce Store with REST API enabled
+
+### 2. Installation
+```bash
+npm install
+cp .env.example .env.local
+npx prisma generate
+```
+
+### 3. Database Sync
+```bash
+npx prisma db push
+```
+
+### 4. Run Locally
+```bash
+npm run dev
+```
+
+---
+
+## 📖 Documentation
+
+For a detailed, step-by-step walkthrough on configuring WhatsApp, WooCommerce, and Production Hardening, please refer to the:
+
+👉 **[Final Setup Guide](./docs/setup-guide.md)**
+
+---
+
+## 🛡️ License
+
+Private / Internal Business Automation Project.
