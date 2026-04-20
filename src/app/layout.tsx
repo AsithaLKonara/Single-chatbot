@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "OmniChat AI — Universal Context-Aware Intelligence",
-  description: "Production-ready AI Chatbot platform with universal SDK and semantic knowledge retrieval.",
+  title: "OmniChat — Business Automation Agent",
+  description: "Advanced AI Agent for WhatsApp, WooCommerce, and Customer Support automation.",
 };
 
 export default function RootLayout({
