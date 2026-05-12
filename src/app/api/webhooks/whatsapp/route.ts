@@ -5,9 +5,13 @@ import {
     verifySignature,
     sendWhatsAppMessage,
 } from "@/lib/whatsapp";
+import { logger } from "@/lib/logger";
 import { detectIntent } from "@/lib/intent";
 import { acquireMessageLock } from "@/lib/queue";
 import { getHistory, saveMessage, getCustomerProfile, upsertCustomerProfile, buildCustomerContext } from "@/lib/memory";
+import { getCart } from "@/lib/cart";
+import { evaluateStrategy } from "@/lib/strategy";
+import { getStrategyPerformance } from "@/lib/analytics";
 import { searchKnowledge } from "@/lib/knowledge";
 import {
     searchProducts,
@@ -19,6 +23,8 @@ import {
 } from "@/lib/woocommerce";
 import { getCourier, detectProvider, formatTrackingStatus } from "@/lib/courier";
 import { groq } from "@/lib/groq";
+import { calculatePredictiveSignals } from "@/lib/predictive";
+import { processProactiveIntervention } from "@/lib/automation";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +63,7 @@ export async function POST(req: Request) {
 
     // Process async — don't block the 200 response
     processMessage(inbound).catch((err) =>
-        console.error("WhatsApp message processing error:", err)
+        logger.error("WhatsApp message processing error", { error: err })
     );
 
     return new Response("OK", { status: 200 });
@@ -77,7 +83,7 @@ async function processMessage(inbound: {
     // Idempotency — skip if already processed (Meta retry)
     const acquired = await acquireMessageLock(messageId);
     if (!acquired) {
-        console.log(`[WhatsApp] Skipping duplicate message ${messageId}`);
+        logger.info(`[WhatsApp] Skipping duplicate message ${messageId}`, { messageId, from });
         return;
     }
 
@@ -134,6 +140,31 @@ Rules:
             // Update last-seen in customer profile
             upsertCustomerProfile(from, {}),
         ]);
+
+        // ─── Autonomous Sales Intelligence (Phase 4) ──────────────────────────
+        try {
+            const [cart, performance] = await Promise.all([
+                getCart(userId),
+                getStrategyPerformance()
+            ]);
+
+            // Calculate predictive signals
+            const signals = calculatePredictiveSignals(
+                profile,
+                cart,
+                0, // For now, session duration tracking would need more state
+                0  // Friction tracking would need reflection integration
+            );
+
+            // Proactive Intervention logic
+            if (signals.recommendedAction !== "NONE") {
+                await processProactiveIntervention(from, signals, profile);
+            }
+
+            // Note: Mid-session strategy shift would happen in the NEXT turn's detectIntent/Strategy evaluation
+        } catch (autoErr) {
+            logger.warn("[WhatsApp] Autonomous logic error", { error: autoErr });
+        }
     } catch (err) {
         console.error("processMessage error:", err);
         await sendWhatsAppMessage(

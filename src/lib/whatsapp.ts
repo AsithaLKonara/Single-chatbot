@@ -154,3 +154,43 @@ export async function sendWhatsAppButtons(
 
     return res.ok;
 }
+
+export async function sendWhatsAppList(
+    to: string,
+    body: string,
+    buttonText: string,
+    sections: { title: string; rows: { id: string; title: string; description?: string }[] }[]
+): Promise<boolean> {
+    if (!WA_TOKEN || !WA_PHONE_ID) return false;
+
+    const res = await fetch(GRAPH_URL, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${WA_TOKEN}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to,
+            type: "interactive",
+            interactive: {
+                type: "list",
+                body: { text: body },
+                action: {
+                    button: buttonText,
+                    sections: sections.map((s) => ({
+                        title: s.title,
+                        rows: s.rows.map((r) => ({
+                            id: r.id,
+                            title: r.title,
+                            description: r.description,
+                        })),
+                    })),
+                },
+            },
+        }),
+    });
+
+    return res.ok;
+}

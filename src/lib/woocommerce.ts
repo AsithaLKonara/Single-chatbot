@@ -1,8 +1,17 @@
-// WooCommerce REST API v3 service layer
+import { Redis } from "@upstash/redis";
 
 const WC_URL = process.env.WC_STORE_URL ?? "";
 const WC_KEY = process.env.WC_CONSUMER_KEY ?? "";
 const WC_SECRET = process.env.WC_CONSUMER_SECRET ?? "";
+
+let redis: Redis | null = null;
+function getRedis() {
+    if (redis) return redis;
+    if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+        redis = Redis.fromEnv();
+    }
+    return redis;
+}
 
 // Basic-auth header
 function authHeaders(): Record<string, string> {
@@ -13,22 +22,50 @@ function authHeaders(): Record<string, string> {
     };
 }
 
-async function wcFetch<T>(path: string, options?: RequestInit): Promise<T | null> {
+async function wait(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function wcFetch<T>(path: string, options?: RequestInit, retries = 3): Promise<T | null> {
     if (!WC_URL || !WC_KEY) return null;
-    try {
-        const res = await fetch(`${WC_URL}/wp-json/wc/v3${path}`, {
-            ...options,
-            headers: { ...authHeaders(), ...(options?.headers ?? {}) },
-        });
-        if (!res.ok) {
-            console.error(`WooCommerce ${path} → ${res.status}`);
-            return null;
+    
+    let lastError: any;
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(`${WC_URL}/wp-json/wc/v3${path}`, {
+                ...options,
+                headers: { ...authHeaders(), ...(options?.headers ?? {}) },
+            });
+
+            // If success, return data
+            if (res.ok) {
+                return (await res.json()) as T;
+            }
+
+            // Classification of errors
+            if (res.status >= 400 && res.status < 500) {
+                // Client error (400, 401, 404) - don't retry unless it's 429
+                if (res.status !== 429) {
+                    console.error(`[WooCommerce] Client Error ${path} → ${res.status}`);
+                    return null;
+                }
+            }
+
+            // If we're here, it's either 429 or 5xx
+            console.warn(`[WooCommerce] Retry ${i + 1}/${retries} for ${path} (Status: ${res.status})`);
+            lastError = new Error(`HTTP ${res.status}`);
+        } catch (err) {
+            console.error(`[WooCommerce] Attempt ${i + 1} failed:`, err);
+            lastError = err;
         }
-        return (await res.json()) as T;
-    } catch (err) {
-        console.error("WooCommerce fetch error:", err);
-        return null;
+        
+        if (i < retries - 1) {
+            await wait(Math.pow(2, i) * 1000); // Exponential backoff: 1s, 2s, 4s
+        }
     }
+
+    console.error(`[WooCommerce] All retries failed for ${path}`, lastError);
+    return null;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,9 +74,12 @@ export interface WCProduct {
     id: number;
     name: string;
     price: string;
+    regular_price?: string;
+    on_sale?: boolean;
     short_description: string;
     permalink: string;
     stock_status: string;
+    stock_quantity?: number | null;
     images: { src: string }[];
 }
 
@@ -57,10 +97,27 @@ export interface WCOrder {
 // ─── Product Queries ───────────────────────────────────────────────────────────
 
 export async function searchProducts(query: string): Promise<WCProduct[]> {
+    const client = getRedis();
+    const cacheKey = `wc:search:${Buffer.from(query).toString("base64")}`;
+
+    if (client) {
+        const cached = await client.get<WCProduct[]>(cacheKey);
+        if (cached) {
+            console.log(`[WooCommerce] Cache hit for search: ${query}`);
+            return cached;
+        }
+    }
+
     const data = await wcFetch<WCProduct[]>(
         `/products?search=${encodeURIComponent(query)}&per_page=5&status=publish`
     );
-    return data ?? [];
+    const products = data ?? [];
+
+    if (client && products.length > 0) {
+        await client.set(cacheKey, products, { ex: 300 }); // 5 min cache
+    }
+
+    return products;
 }
 
 export async function getProduct(productId: number): Promise<WCProduct | null> {
@@ -83,41 +140,69 @@ export async function getOrdersByPhone(phone: string): Promise<WCOrder[]> {
 // ─── Order Creation ────────────────────────────────────────────────────────────
 
 export interface CreateOrderPayload {
-    customerName: string;
-    phone: string;
-    email?: string;
-    address: string;
-    city: string;
-    country?: string;
-    productId: number;
-    quantity: number;
+    customer: {
+        name: string;
+        phone: string;
+        email: string;
+        address: string;
+        city: string;
+        country: string;
+    };
+    items: { productId: number; quantity: number }[];
+    paymentMethod?: string;
 }
 
-export async function createOrder(payload: CreateOrderPayload): Promise<WCOrder | null> {
+export async function createOrder(payload: CreateOrderPayload, idempotencyKey?: string): Promise<WCOrder | null> {
+    // 1. Idempotency Check — search for existing order with this key in meta
+    if (idempotencyKey) {
+        const existing = await wcFetch<WCOrder[]>(
+            `/orders?meta_key=_omnichat_idempotency_key&meta_value=${idempotencyKey}`
+        );
+        if (existing && existing.length > 0) {
+            console.log(`[WooCommerce] Found existing order for key ${idempotencyKey}: #${existing[0].id}`);
+            return existing[0];
+        }
+    }
+
     const body = {
-        payment_method: "cod",
-        payment_method_title: "Cash on Delivery",
+        payment_method: payload.paymentMethod || "cod",
+        payment_method_title: payload.paymentMethod === "cod" ? "Cash on Delivery" : "Online Payment",
         set_paid: false,
         billing: {
-            first_name: payload.customerName.split(" ")[0],
-            last_name: payload.customerName.split(" ").slice(1).join(" ") || "-",
-            phone: payload.phone,
-            email: payload.email ?? `${payload.phone}@wa.noemail`,
-            address_1: payload.address,
-            city: payload.city,
-            country: payload.country ?? "LK",
+            first_name: payload.customer.name.split(" ")[0],
+            last_name: payload.customer.name.split(" ").slice(1).join(" ") || "-",
+            phone: payload.customer.phone,
+            email: payload.customer.email,
+            address_1: payload.customer.address,
+            city: payload.customer.city,
+            country: payload.customer.country,
         },
         shipping: {
-            first_name: payload.customerName.split(" ")[0],
-            last_name: payload.customerName.split(" ").slice(1).join(" ") || "-",
-            address_1: payload.address,
-            city: payload.city,
-            country: payload.country ?? "LK",
+            first_name: payload.customer.name.split(" ")[0],
+            last_name: payload.customer.name.split(" ").slice(1).join(" ") || "-",
+            address_1: payload.customer.address,
+            city: payload.customer.city,
+            country: payload.customer.country,
         },
-        line_items: [{ product_id: payload.productId, quantity: payload.quantity }],
+        line_items: payload.items.map(item => ({
+            product_id: item.productId,
+            quantity: item.quantity
+        })),
+        meta_data: idempotencyKey ? [
+            { key: "_omnichat_idempotency_key", value: idempotencyKey }
+        ] : [],
     };
 
     return wcFetch<WCOrder>("/orders", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function calculateShipping(city: string, items: any[]): Promise<{ method: string; cost: number }[]> {
+    // Placeholder for actual WooCommerce shipping zones logic
+    // Usually calls /shipping_methods or custom logic
+    return [
+        { method: "Standard Shipping", cost: city.toLowerCase() === "colombo" ? 250 : 450 },
+        { method: "Express Delivery", cost: 800 }
+    ];
 }
 
 // ─── Returns / Refunds ─────────────────────────────────────────────────────────

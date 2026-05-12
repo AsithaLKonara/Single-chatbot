@@ -36,8 +36,26 @@ export async function getHistory(
 export interface CustomerProfile {
     phone: string;
     name?: string;
+    email?: string;
     last_order_id?: string;
-    preferences?: Record<string, unknown>;
+    preferences?: Record<string, any>;
+    behavioralSignals?: {
+        avgOrderValue?: number;
+        purchaseFrequency?: number; // days
+        preferredBrands?: string[];
+        abandonedCategories?: string[];
+        totalOrders?: number;
+        priceSensitivity?: "HIGH" | "MEDIUM" | "LOW";
+        urgencyLevel?: "HIGH" | "MEDIUM" | "LOW";
+        categoryAffinity?: Record<string, number>; // category -> score
+    };
+    interests?: string[]; // Semantic memory
+    outcomeHistory?: {
+        timestamp: string;
+        sentiment: string;
+        frictions: string[];
+        strategy: string;
+    }[];
     created_at?: string;
 }
 

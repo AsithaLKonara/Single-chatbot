@@ -11,8 +11,48 @@ model Customer {
   id           String   @id @default(cuid())
   phone        String   @unique
   name         String?
+  email        String?
+  address      String?
+  city         String?
   lastOrderId  String?
   preferences  Json?    @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  carts        Cart[]
+}
+
+model Cart {
+  id         String     @id @default(cuid())
+  userId     String
+  customer   Customer   @relation(fields: [userId], references: [id])
+  items      CartItem[]
+  status     String     @default("active") // active, abandoned, converted
+  subtotal   Float      @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id])
+  productId Int
+  name      String
+  price     Float
+  quantity  Int
+  image     String?
+  createdAt DateTime @default(now())
+}
+
+model CheckoutSession {
+  id           String   @id @default(cuid())
+  userId       String
+  cartId       String
+  stage        String   @default("CART_REVIEW") // CART_REVIEW, CUSTOMER_INFO, SHIPPING, PAYMENT, CONFIRMED
+  customerData Json?    // Stores collected name, address, etc.
+  shippingInfo Json?
+  paymentId    String?
+  status       String   @default("pending")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
