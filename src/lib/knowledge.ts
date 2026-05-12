@@ -13,7 +13,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         input: text,
     });
 
-    const embedding = response.data[0].embedding;
+    const embedding = response.data[0].embedding as number[];
     await setCachedEmbedding(text, embedding);
     return embedding;
 }

@@ -3,7 +3,7 @@
 
 import { getOrder, getOrdersByPhone } from "@/lib/woocommerce";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
-import { getCustomerProfile } from "@/lib/memory";
+import { getCustomerProfile, CustomerProfile } from "@/lib/memory";
 
 // ─── Delivered order follow-up ─────────────────────────────────────────────────
 // Run after orders are marked "completed" — ask for a review
@@ -90,5 +90,25 @@ export async function processReorderNudges(phones: string[]): Promise<void> {
     }
 }
 
-// Suppress unused import warning
-void getOrdersByPhone;
+export async function processProactiveIntervention(
+    phone: string,
+    signals: { purchaseIntent: number; abandonmentRisk: number; recommendedAction: string },
+    profile: CustomerProfile | null
+): Promise<void> {
+    const name = profile?.name ?? "there";
+    
+    if (signals.recommendedAction === "ACCELERATE") {
+        const message = 
+            `Hi ${name}! I noticed you've found some great items. 🌟\n` +
+            `Would you like me to fast-track your checkout? I can have your order ready in seconds!`;
+        await sendWhatsAppMessage(phone, message);
+        console.log(`[Proactive] Acceleration nudge sent to ${phone}`);
+    } 
+    else if (signals.recommendedAction === "RESCUE") {
+        const message = 
+            `Hi ${name}, I'm here if you have any questions! 😊\n` +
+            `If you're unsure about anything, let me know. I can also check for our best available deals for you!`;
+        await sendWhatsAppMessage(phone, message);
+        console.log(`[Proactive] Rescue nudge sent to ${phone}`);
+    }
+}

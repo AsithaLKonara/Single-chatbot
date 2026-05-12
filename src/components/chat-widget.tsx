@@ -8,6 +8,7 @@ import { twMerge } from "tailwind-merge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { CSSProperties } from "react";
+import { ProductCarousel } from "./commerce/ProductCard";
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -21,7 +22,7 @@ export function ChatWidget({
     primaryColor?: string
 }) {
     const [isOpen, setIsOpen] = useState(defaultOpen);
-    const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+    const [messages, setMessages] = useState<{ role: string; content: string; data?: any }[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState("");
@@ -75,20 +76,42 @@ export function ChatWidget({
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let assistantContent = "";
+            let currentData: any = null;
+            
             setMessages([...newMsgs, { role: "assistant", content: "" }]);
 
+            let buffer = "";
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                assistantContent += decoder.decode(value, { stream: true });
-                setMessages((prev) => {
-                    const updated = [...prev];
-                    const last = updated[updated.length - 1];
-                    if (last?.role === "assistant") {
-                        updated[updated.length - 1] = { ...last, content: assistantContent };
+                
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    if (line.startsWith("T:")) {
+                        assistantContent += line.slice(2);
+                        setMessages((prev) => {
+                            const updated = [...prev];
+                            const last = updated[updated.length - 1];
+                            if (last?.role === "assistant") {
+                                updated[updated.length - 1] = { 
+                                    ...last, 
+                                    content: assistantContent,
+                                    data: currentData // Attach data to the message
+                                };
+                            }
+                            return updated;
+                        });
+                    } else if (line.startsWith("D:")) {
+                        try {
+                            currentData = JSON.parse(line.slice(2));
+                        } catch (e) {
+                            console.error("Data parse error:", e);
+                        }
                     }
-                    return updated;
-                });
+                }
             }
         } catch (e) {
             console.error("Chat error:", e);
@@ -186,6 +209,30 @@ export function ChatWidget({
                                         >
                                             {m.content}
                                         </ReactMarkdown>
+
+                                        {/* Structured Commerce UI */}
+                                        {(m as any).data && (m as any).data.type === "product_list" && (
+                                            <div className="mt-4 -mx-2">
+                                                <ProductCarousel 
+                                                    products={(m as any).data.products} 
+                                                    onAddToCart={(id) => {
+                                                        setInput(`Add product ${id} to cart`);
+                                                        // Auto-send can be implemented here
+                                                    }}
+                                                />
+                                            </div>
+                                        )}
+                                        
+                                        {(m as any).data && (m as any).data.type === "checkout_init" && (
+                                            <div className="mt-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Secure Checkout Session</span>
+                                                    <div className="px-2 py-0.5 bg-emerald-500/20 text-emerald-500 text-[8px] font-black rounded-full uppercase tracking-widest">Active</div>
+                                                </div>
+                                                <div className="text-xs text-white/60 mb-2 italic">Current Stage: {(m as any).data.checkout.stage}</div>
+                                                <div className="text-lg font-black text-white">${(m as any).data.cart.subtotal.toFixed(2)}</div>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             ))}
