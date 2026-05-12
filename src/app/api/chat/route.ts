@@ -72,111 +72,119 @@ async function runTool(
 ): Promise<ToolResult> {
     const { entities } = intent;
 
-    switch (intent.intent) {
-        case "product_search": {
-            const query = entities.product_query ?? userMessage;
-            const products = await searchProducts(query);
-            if (!products.length) return { text: "No products found matching your query.", intent: "product_search" };
-            
-            return {
-                text: "I found these items for you:",
-                data: { type: "product_list", products: products.map(p => ({
-                    id: p.id,
-                    name: p.name,
-                    price: p.price,
-                    regular_price: p.regular_price,
-                    on_sale: p.on_sale,
-                    short_description: p.short_description,
-                    image: p.images?.[0]?.src,
-                    stock_status: p.stock_status,
-                    stock_quantity: p.stock_quantity,
-                    permalink: p.permalink
-                })) },
-                intent: "product_search"
-            };
-        }
-
-        case "cart_add": {
-            const query = entities.product_query ?? userMessage;
-            const pid = entities.product_id;
-            
-            let product;
-            if (pid) {
-                product = await getProduct(Number(pid));
-            } else {
-                const search = await searchProducts(query);
-                product = search[0];
+    try {
+        switch (intent.intent) {
+            case "product_search": {
+                const query = entities.product_query ?? userMessage;
+                const products = await searchProducts(query);
+                if (!products.length) return { text: "No products found matching your query.", intent: "product_search" };
+                
+                return {
+                    text: "I found these items for you:",
+                    data: { type: "product_list", products: products.map(p => ({
+                        id: p.id,
+                        name: p.name,
+                        price: p.price,
+                        regular_price: p.regular_price,
+                        on_sale: p.on_sale,
+                        short_description: p.short_description,
+                        image: p.images?.[0]?.src,
+                        stock_status: p.stock_status,
+                        stock_quantity: p.stock_quantity,
+                        permalink: p.permalink
+                    })) },
+                    intent: "product_search"
+                };
             }
 
-            if (!product) return { text: "I couldn't find that product to add to your cart.", intent: "cart_add" };
+            case "cart_add": {
+                const query = entities.product_query ?? userMessage;
+                const pid = entities.product_id;
+                
+                let product;
+                if (pid) {
+                    product = await getProduct(Number(pid));
+                } else {
+                    const search = await searchProducts(query);
+                    product = search[0];
+                }
 
-            const cart = await addToCart(userId, {
-                productId: product.id,
-                name: product.name,
-                price: parseFloat(product.price),
-                quantity: entities.quantity || 1,
-                image: product.images?.[0]?.src
-            });
+                if (!product) return { text: "I couldn't find that product to add to your cart.", intent: "cart_add" };
 
-            return {
-                text: `✅ Added *${product.name}* to your cart.\n\nYour cart total is now **${cart.subtotal.toFixed(2)}**. Would you like to view your cart or continue shopping?`,
-                data: { type: "cart_update", cart },
-                intent: "cart_add"
-            };
+                const cart = await addToCart(userId, {
+                    productId: product.id,
+                    name: product.name,
+                    price: parseFloat(product.price),
+                    quantity: entities.quantity || 1,
+                    image: product.images?.[0]?.src
+                });
+
+                return {
+                    text: `✅ Added *${product.name}* to your cart.\n\nYour cart total is now **${cart.subtotal.toFixed(2)}**. Would you like to view your cart or continue shopping?`,
+                    data: { type: "cart_update", cart },
+                    intent: "cart_add"
+                };
+            }
+
+            case "cart_view": {
+                const cart = await getCart(userId);
+                if (!cart.items.length) return { text: "Your cart is currently empty.", intent: "cart_view" };
+
+                const items = cart.items
+                    .map((i) => `• ${i.name} (x${i.quantity}) — ${i.price}`)
+                    .join("\n");
+                
+                return {
+                    text: `🛒 **Your Cart**\n\n${items}\n\n**Total: ${cart.subtotal.toFixed(2)}**\n\nReady to checkout?`,
+                    data: { type: "cart_summary", cart },
+                    intent: "cart_view"
+                };
+            }
+
+            case "checkout_start": {
+                const cart = await getCart(userId);
+                if (!cart.items.length) return { text: "Your cart is empty. Add some items before checking out!", intent: "checkout_start" };
+
+                const checkout = await getOrCreateCheckout(userId, cart.userId); // userId as cart identifier for now
+                const summary = cart.items.map(i => `${i.name} x${i.quantity}`).join(", ");
+                
+                return {
+                    text: `🚀 **Starting Checkout**\n\nYou have **${cart.items.length} items** (${summary}) in your cart.\n\nTo proceed, please provide your **Full Name**, **Delivery Address**, and **City**.`,
+                    data: { type: "checkout_init", checkout, cart },
+                    intent: "checkout_start"
+                };
+            }
+
+            case "cart_clear": {
+                await clearCart(userId);
+                return { text: "Your cart has been cleared.", intent: "cart_clear" };
+            }
+
+            case "human_handoff": {
+                return { 
+                    text: "I'm connecting you with a human senior sales representative now. They will review our conversation and take over shortly. Thank you for your patience!", 
+                    data: { type: "handoff_init" },
+                    intent: "human_handoff" 
+                };
+            }
+
+            case "voice_input": {
+                return {
+                    text: "I've received your voice message. I'm processing it now to find the best options for you.",
+                    data: { type: "voice_processing" },
+                    intent: "voice_input"
+                };
+            }
+
+            default:
+                return { text: "", intent: "general" };
         }
-
-        case "cart_view": {
-            const cart = await getCart(userId);
-            if (!cart.items.length) return { text: "Your cart is currently empty.", intent: "cart_view" };
-
-            const items = cart.items
-                .map((i) => `• ${i.name} (x${i.quantity}) — ${i.price}`)
-                .join("\n");
-            
-            return {
-                text: `🛒 **Your Cart**\n\n${items}\n\n**Total: ${cart.subtotal.toFixed(2)}**\n\nReady to checkout?`,
-                data: { type: "cart_summary", cart },
-                intent: "cart_view"
-            };
-        }
-
-        case "checkout_start": {
-            const cart = await getCart(userId);
-            if (!cart.items.length) return { text: "Your cart is empty. Add some items before checking out!", intent: "checkout_start" };
-
-            const checkout = await getOrCreateCheckout(userId, cart.userId); // userId as cart identifier for now
-            const summary = cart.items.map(i => `${i.name} x${i.quantity}`).join(", ");
-            
-            return {
-                text: `🚀 **Starting Checkout**\n\nYou have **${cart.items.length} items** (${summary}) in your cart.\n\nTo proceed, please provide your **Full Name**, **Delivery Address**, and **City**.`,
-                data: { type: "checkout_init", checkout, cart },
-                intent: "checkout_start"
-            };
-        }
-
-        case "cart_clear": {
-            await clearCart(userId);
-            return { text: "Your cart has been cleared.", intent: "cart_clear" };
-        }
-
-        case "human_handoff": {
-            return { 
-                text: "I'm connecting you with a human senior sales representative now. They will review our conversation and take over shortly. Thank you for your patience!", 
-                data: { type: "handoff_init" },
-                intent: "human_handoff" 
-            };
-        }
-
-        case "voice_input": {
-            return {
-                text: "I've received your voice message. I'm processing it now to find the best options for you.",
-                data: { type: "voice_processing" },
-                intent: "voice_input"
-            };
-        }
-
-        default:
-            return { text: "", intent: "general" };
+    } catch (err) {
+        console.error(`[CHAT] Tool execution failed (${intent.intent})`, err);
+        return { 
+            text: "I encountered a technical hiccup while processing that action. I can still chat, but I might need a moment to reconnect with my tools.", 
+            intent: intent.intent 
+        };
     }
 }
 
@@ -185,9 +193,13 @@ async function runTool(
 export async function POST(req: Request) {
     try {
         if (ratelimit) {
-            const ip = req.headers.get("x-forwarded-for") ?? "anon";
-            const { success } = await ratelimit.limit(ip);
-            if (!success) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+            try {
+                const ip = req.headers.get("x-forwarded-for") ?? "anon";
+                const { success } = await ratelimit.limit(ip);
+                if (!success) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+            } catch (redisErr) {
+                console.error("[RATELIMIT] Redis connection failed, bypassing rate limit.", redisErr);
+            }
         }
 
         const { message, messages = [], context, session_id, userId = "guest" } = await req.json();
@@ -225,13 +237,28 @@ export async function POST(req: Request) {
         }
 
         const [history, knowledge, cart, profile] = await Promise.all([
-            getHistory(sessionId, userId),
-            searchKnowledge(userMessage),
-            getCart(userId),
-            getCustomerProfile(userId) // userId used as phone/id for simplicity
+            getHistory(sessionId, userId).catch(err => {
+                console.warn("[CHAT] History fetch failed", err);
+                return [];
+            }),
+            searchKnowledge(userMessage).catch(err => {
+                console.warn("[CHAT] Knowledge fetch failed", err);
+                return [];
+            }),
+            getCart(userId).catch(err => {
+                console.warn("[CHAT] Cart fetch failed", err);
+                return { userId, items: [], subtotal: 0 };
+            }),
+            getCustomerProfile(userId).catch(err => {
+                console.warn("[CHAT] Profile fetch failed", err);
+                return null;
+            })
         ]);
 
-        const checkout = await getOrCreateCheckout(userId, cart.userId);
+        const checkout = await getOrCreateCheckout(userId, cart.userId).catch(err => {
+            console.warn("[CHAT] Checkout fetch failed", err);
+            return { id: "mock", userId, cartId: cart.userId, stage: "CART_REVIEW" as any };
+        });
 
         // ─── ADAPTIVE STRATEGY ───
         const strategy = evaluateStrategy(profile || undefined);

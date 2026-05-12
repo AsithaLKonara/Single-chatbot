@@ -32,8 +32,12 @@ export async function getCart(userId: string): Promise<Cart> {
     const key = `cart:${userId}`;
 
     if (client) {
-        const cached = await client.get<Cart>(key);
-        if (cached) return cached;
+        try {
+            const cached = await client.get<Cart>(key);
+            if (cached) return cached;
+        } catch (err) {
+            console.warn("[CART] Redis fetch failed, falling back to DB", err);
+        }
     }
 
     // Fallback to database
@@ -61,7 +65,11 @@ export async function getCart(userId: string): Promise<Cart> {
 
         // Cache it
         if (client) {
-            await client.set(key, cart, { ex: CART_TTL });
+            try {
+                await client.set(key, cart, { ex: CART_TTL });
+            } catch (err) {
+                console.warn("[CART] Redis cache save failed", err);
+            }
         }
 
         return cart;
@@ -86,7 +94,11 @@ export async function addToCart(userId: string, item: CartItem): Promise<Cart> {
     // Save to Redis
     const client = getRedis();
     if (client) {
-        await client.set(`cart:${userId}`, cart, { ex: CART_TTL });
+        try {
+            await client.set(`cart:${userId}`, cart, { ex: CART_TTL });
+        } catch (err) {
+            console.warn("[CART] Redis save failed", err);
+        }
     }
 
     omniBus.emitOmni(OmniEvent.CART_UPDATED, { userId, cart });
@@ -104,7 +116,11 @@ export async function removeFromCart(userId: string, productId: number): Promise
 
     const client = getRedis();
     if (client) {
-        await client.set(`cart:${userId}`, cart, { ex: CART_TTL });
+        try {
+            await client.set(`cart:${userId}`, cart, { ex: CART_TTL });
+        } catch (err) {
+            console.warn("[CART] Redis save failed", err);
+        }
     }
 
     syncCartToDb(userId, cart).catch(console.error);
@@ -115,7 +131,11 @@ export async function removeFromCart(userId: string, productId: number): Promise
 export async function clearCart(userId: string): Promise<void> {
     const client = getRedis();
     if (client) {
-        await client.del(`cart:${userId}`);
+        try {
+            await client.del(`cart:${userId}`);
+        } catch (err) {
+            console.warn("[CART] Redis delete failed", err);
+        }
     }
 
     try {

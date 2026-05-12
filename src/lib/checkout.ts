@@ -32,8 +32,12 @@ export async function getOrCreateCheckout(userId: string, cartId: string): Promi
     const key = `checkout:${userId}`;
 
     if (client) {
-        const cached = await client.get<CheckoutState>(key);
-        if (cached && cached.cartId === cartId) return cached;
+        try {
+            const cached = await client.get<CheckoutState>(key);
+            if (cached && cached.cartId === cartId) return cached;
+        } catch (err) {
+            console.warn("[CHECKOUT] Redis fetch failed, falling back to DB", err);
+        }
     }
 
     // Fallback to DB or create new
@@ -58,7 +62,11 @@ export async function getOrCreateCheckout(userId: string, cartId: string): Promi
     };
 
     if (client) {
-        await client.set(key, state, { ex: 3600 }); // 1 hour
+        try {
+            await client.set(key, state, { ex: 3600 }); // 1 hour
+        } catch (err) {
+            console.warn("[CHECKOUT] Redis cache save failed", err);
+        }
     }
 
     return state;
@@ -109,7 +117,11 @@ export async function updateCheckoutStage(userId: string, stage: CheckoutStage, 
 
     // Update cache
     if (client) {
-        await client.set(key, newState, { ex: 3600 });
+        try {
+            await client.set(key, newState, { ex: 3600 });
+        } catch (err) {
+            console.warn("[CHECKOUT] Redis update failed", err);
+        }
     }
 
     return newState;
@@ -127,6 +139,10 @@ export async function completeCheckout(userId: string, paymentId: string): Promi
     });
 
     if (client) {
-        await client.del(key);
+        try {
+            await client.del(key);
+        } catch (err) {
+            console.warn("[CHECKOUT] Redis delete failed", err);
+        }
     }
 }

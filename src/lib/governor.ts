@@ -35,8 +35,12 @@ const GOVERNOR_KEY = "omnichat:governor:weights";
 export async function getSystemWeights(): Promise<SystemWeights> {
     const client = getRedis();
     if (client) {
-        const cached = await client.get<SystemWeights>(GOVERNOR_KEY);
-        if (cached) return cached;
+        try {
+            const cached = await client.get<SystemWeights>(GOVERNOR_KEY);
+            if (cached) return cached;
+        } catch (redisErr) {
+            console.warn("[GOVERNOR] Redis weights fetch failed", redisErr);
+        }
     }
 
     // Default weights
@@ -86,8 +90,12 @@ export async function optimizeSystemWeights(): Promise<void> {
         // Persist the new "Ideal" system state
         const client = getRedis();
         if (client) {
-            await client.set(GOVERNOR_KEY, currentWeights);
-            console.log("[GOVERNOR] System weights optimized based on global performance.");
+            try {
+                await client.set(GOVERNOR_KEY, currentWeights);
+                console.log("[GOVERNOR] System weights optimized based on global performance.");
+            } catch (redisErr) {
+                console.warn("[GOVERNOR] Redis weights save failed", redisErr);
+            }
         }
     } catch (err) {
         console.error("[GOVERNOR] Optimization failed:", err);

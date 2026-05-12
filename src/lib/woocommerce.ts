@@ -101,10 +101,14 @@ export async function searchProducts(query: string): Promise<WCProduct[]> {
     const cacheKey = `wc:search:${Buffer.from(query).toString("base64")}`;
 
     if (client) {
-        const cached = await client.get<WCProduct[]>(cacheKey);
-        if (cached) {
-            console.log(`[WooCommerce] Cache hit for search: ${query}`);
-            return cached;
+        try {
+            const cached = await client.get<WCProduct[]>(cacheKey);
+            if (cached) {
+                console.log(`[WooCommerce] Cache hit for search: ${query}`);
+                return cached;
+            }
+        } catch (redisErr) {
+            console.warn("[WooCommerce] Redis cache get failed", redisErr);
         }
     }
 
@@ -114,7 +118,11 @@ export async function searchProducts(query: string): Promise<WCProduct[]> {
     const products = data ?? [];
 
     if (client && products.length > 0) {
-        await client.set(cacheKey, products, { ex: 300 }); // 5 min cache
+        try {
+            await client.set(cacheKey, products, { ex: 300 }); // 5 min cache
+        } catch (redisErr) {
+            console.warn("[WooCommerce] Redis cache set failed", redisErr);
+        }
     }
 
     return products;
