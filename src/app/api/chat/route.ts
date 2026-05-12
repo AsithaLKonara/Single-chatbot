@@ -283,10 +283,16 @@ export async function POST(req: Request) {
             "Final Instruction: Synthesize the plan and tool results into a natural, helpful response.",
         ].filter(Boolean).join("\n\n");
 
+        // Sanitize history for Groq (remove unsupported properties like 'data')
+        const sanitizedHistory = messages.slice(-4).map((m: any) => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+        }));
+
         const completion = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
             stream: true,
-            messages: [{ role: "system", content: systemContent }, ...messages.slice(-4), { role: "user", content: userMessage }],
+            messages: [{ role: "system", content: systemContent }, ...sanitizedHistory, { role: "user", content: userMessage }],
             max_completion_tokens: 500,
             temperature: 0.7,
         });
